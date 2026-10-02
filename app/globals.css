@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #2b1b33;
+  --ink-soft: #6b5570;
+  --cream: #fbf6ef;
+  --clay: #c1666b;
+  --moss: #6b7f5e;
+  --gold: #d4a94a;
+  --mist: #e4d9e8;
+  --surface: #ffffff;
+  --font-display: 'Fraunces', serif;
+  --font-body: 'Public Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
