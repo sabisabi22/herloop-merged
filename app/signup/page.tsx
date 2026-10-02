@@ -1,4 +1,4 @@
-"use client";
+code .\app\signup\page.tsx"use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -19,7 +19,7 @@ export default function SignupPage() {
     setStatus("Creating account...");
     try {
       await createAccount({ email, password, name });
-      router.push("/dashboard");
+      router.push("/onboarding");
     } catch (err: any) {
       setStatus(err.message ?? "Something went wrong.");
       setBusy(false);
