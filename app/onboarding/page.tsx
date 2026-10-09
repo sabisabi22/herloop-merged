@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
+
 import { app } from "@/lib/firebaseConfig";
 import { COLORS } from "@/lib/theme";
+
 import {
   setupAdultSelf,
   setupGuardianAndChild,
@@ -125,7 +127,34 @@ export default function Onboarding() {
     setError("");
 
     try {
-      await requestTeenApproval(uid, parentEmail.trim());
+      // 1. Save the approval request in Firestore
+      const approvalToken = await requestTeenApproval(
+        uid,
+        parentEmail.trim()
+      );
+
+      // 2. Send the parent/guardian email
+      const response = await fetch("/api/send-parent-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          parentEmail: parentEmail.trim(),
+          teenName: "HerLoop user",
+          approvalToken: approvalToken,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message ?? "Could not send the parent approval email."
+        );
+      }
+
+      // 3. Email sent successfully → waiting page
       router.push("/waiting-approval");
     } catch (e: any) {
       setError(e.message ?? "Something went wrong.");
@@ -195,7 +224,6 @@ export default function Onboarding() {
             exit={{ opacity: 0, x: -16 }}
             transition={{ duration: 0.22 }}
           >
-
             {/* DATE OF BIRTH */}
             {step === "dob" && (
               <>
@@ -362,7 +390,6 @@ export default function Onboarding() {
                 {error}
               </p>
             )}
-
           </motion.div>
         </AnimatePresence>
       </div>

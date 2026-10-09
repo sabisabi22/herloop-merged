@@ -57,7 +57,7 @@ export default function LoginPage() {
     setBusy(true);
     setStatus("Signing in...");
     try {
-      const uid = await signIn(email.trim(), password, remember);
+     const uid = await signIn(email.trim(), password);
       if (!isEmailVerified()) {
         router.push("/verify-email");
         return;
