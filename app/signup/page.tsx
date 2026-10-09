@@ -19,7 +19,7 @@ export default function SignupPage() {
     setStatus("Creating account...");
     try {
       await createAccount({ email, password, name });
-      router.push("/dashboard");
+      router.push("/onboarding");
     } catch (err: any) {
       setStatus(err.message ?? "Something went wrong.");
       setBusy(false);

@@ -1,8 +1,10 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Heart, Leaf, X } from "lucide-react";
 import { COLORS } from "@/lib/theme";
+import type { AccountTier } from "@/lib/auth";
 import {
   CycleLog,
   FlowLevel,
@@ -16,69 +18,129 @@ import {
 import MotivationCard from "./MotivationCard";
 
 const WEEK_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
+
 const MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
-export default function TrackerPanel({ uid }: { uid: string }) {
+type TrackerPanelProps = {
+  uid: string;
+  tier: AccountTier;
+};
+
+export default function TrackerPanel({
+  uid,
+  tier,
+}: TrackerPanelProps) {
   const [logs, setLogs] = useState<CycleLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
   const [viewDate, setViewDate] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
+
   const [logOpen, setLogOpen] = useState(false);
-  const [logDate, setLogDate] = useState(() => toDateStr(new Date()));
+  const [logDate, setLogDate] = useState(() =>
+    toDateStr(new Date())
+  );
   const [flow, setFlow] = useState<FlowLevel>("medium");
   const [saving, setSaving] = useState(false);
 
   async function refresh() {
     setLoadError(null);
+
     try {
       const data = await getCycleLogs(uid);
       setLogs(data);
-    } catch (err: any) {
-      setLoadError(err.message ?? "Couldn't load your cycle data.");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Couldn't load your cycle data.";
+
+      setLoadError(message);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    setLoading(true);
     refresh();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid]);
 
-  const stats = useMemo(() => computeCycleStats(logs), [logs]);
+  const stats = useMemo(
+    () => computeCycleStats(logs),
+    [logs]
+  );
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
+
   const firstDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+
   const todayStr = toDateStr(new Date());
 
   async function handleLogSubmit() {
     setSaving(true);
+
     try {
       await logPeriodStart(uid, logDate, flow);
       await refresh();
       setLogOpen(false);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Couldn't save your period log.";
+
+      setLoadError(message);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleRemoveLog(dateStr: string) {
-    const log = logs.find((l) => l.startDate === dateStr);
+    const log = logs.find(
+      (item) => item.startDate === dateStr
+    );
+
     if (!log) return;
-    await deleteCycleLog(uid, log.id);
-    await refresh();
-    setSelected(null);
+
+    try {
+      await deleteCycleLog(uid, log.id);
+      await refresh();
+      setSelected(null);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Couldn't remove your period log.";
+
+      setLoadError(message);
+    }
   }
 
   if (loading) {
     return (
-      <div className="px-5 py-10 text-center text-sm" style={{ color: `${COLORS.plum}77` }}>
+      <div
+        className="px-5 py-10 text-center text-sm"
+        style={{ color: `${COLORS.plum}77` }}
+      >
         Loading your cycle data...
       </div>
     );
@@ -87,14 +149,30 @@ export default function TrackerPanel({ uid }: { uid: string }) {
   if (loadError) {
     return (
       <div className="px-5 py-10 text-center">
-        <p className="text-sm font-semibold font-body mb-2" style={{ color: COLORS.rose }}>
+        <p
+          className="text-sm font-semibold font-body mb-2"
+          style={{ color: COLORS.rose }}
+        >
           Couldn't load your cycle data
         </p>
-        <p className="text-xs font-body mb-4" style={{ color: `${COLORS.plum}77` }}>{loadError}</p>
+
+        <p
+          className="text-xs font-body mb-4"
+          style={{ color: `${COLORS.plum}77` }}
+        >
+          {loadError}
+        </p>
+
         <button
-          onClick={() => { setLoading(true); refresh(); }}
+          onClick={() => {
+            setLoading(true);
+            refresh();
+          }}
           className="px-4 py-2 rounded-full text-xs font-semibold font-body"
-          style={{ background: COLORS.plum, color: "#fff" }}
+          style={{
+            background: COLORS.plum,
+            color: "#fff",
+          }}
         >
           Try again
         </button>
@@ -104,97 +182,177 @@ export default function TrackerPanel({ uid }: { uid: string }) {
 
   return (
     <div className="pb-4">
-      <MotivationCard />
-      {/* Month nav */}
+      {/* Lifecycle-specific Learn content */}
+      <MotivationCard tier={tier} />
+
+      {/* Month navigation */}
       <div className="flex items-center justify-between px-5 py-4">
         <button
-          onClick={() => setViewDate(new Date(year, month - 1, 1))}
+          onClick={() =>
+            setViewDate(new Date(year, month - 1, 1))
+          }
           className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:brightness-95"
           style={{ background: `${COLORS.plum}0D` }}
+          aria-label="Previous month"
         >
-          <ChevronLeft size={18} style={{ color: COLORS.plum }} />
+          <ChevronLeft
+            size={18}
+            style={{ color: COLORS.plum }}
+          />
         </button>
+
         <div className="text-center">
-          <p className="font-semibold text-lg font-display" style={{ color: COLORS.plum }}>
+          <p
+            className="font-semibold text-lg font-display"
+            style={{ color: COLORS.plum }}
+          >
             {MONTH_LABELS[month]} {year}
           </p>
-          <p className="text-xs mt-0.5 font-body" style={{ color: `${COLORS.plum}88` }}>
+
+          <p
+            className="text-xs mt-0.5 font-body"
+            style={{ color: `${COLORS.plum}88` }}
+          >
             {stats.hasData
               ? `Cycle day ${stats.cycleDay ?? "–"} · ${stats.phaseLabel}`
               : "No cycle data yet"}
           </p>
         </div>
+
         <button
-          onClick={() => setViewDate(new Date(year, month + 1, 1))}
+          onClick={() =>
+            setViewDate(new Date(year, month + 1, 1))
+          }
           className="w-9 h-9 rounded-full flex items-center justify-center transition-colors hover:brightness-95"
           style={{ background: `${COLORS.plum}0D` }}
+          aria-label="Next month"
         >
-          <ChevronRight size={18} style={{ color: COLORS.plum }} />
+          <ChevronRight
+            size={18}
+            style={{ color: COLORS.plum }}
+          />
         </button>
       </div>
 
-      {/* Legend */}
+      {/* Calendar legend */}
       <div className="flex gap-5 px-5 pb-4">
         {[
           { color: COLORS.rose, label: "Period" },
           { color: COLORS.gold, label: "Fertile" },
-          { color: `${COLORS.rose}55`, label: "Predicted" },
-        ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ background: l.color }} />
-            <span className="text-xs font-body" style={{ color: `${COLORS.plum}68` }}>{l.label}</span>
+          {
+            color: `${COLORS.rose}55`,
+            label: "Predicted",
+          },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center gap-1.5"
+          >
+            <div
+              className="w-2.5 h-2.5 rounded-full"
+              style={{ background: item.color }}
+            />
+
+            <span
+              className="text-xs font-body"
+              style={{ color: `${COLORS.plum}68` }}
+            >
+              {item.label}
+            </span>
           </div>
         ))}
       </div>
 
       {/* Weekday labels */}
       <div className="grid grid-cols-7 px-3">
-        {WEEK_LABELS.map((d, i) => (
-          <div key={`${d}-${i}`} className="h-9 flex items-center justify-center text-xs font-semibold font-body" style={{ color: `${COLORS.plum}42` }}>
-            {d}
+        {WEEK_LABELS.map((day, index) => (
+          <div
+            key={`${day}-${index}`}
+            className="h-9 flex items-center justify-center text-xs font-semibold font-body"
+            style={{ color: `${COLORS.plum}42` }}
+          >
+            {day}
           </div>
         ))}
       </div>
 
-      {/* Day grid */}
+      {/* Calendar day grid */}
       <div className="grid grid-cols-7 px-3 gap-y-0.5">
-        {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const dateStr = toDateStr(new Date(year, month, day));
-          const kind = classifyDate(dateStr, logs, stats);
-          const isToday = dateStr === todayStr;
-          const isSel = selected === dateStr;
+        {Array.from({ length: firstDow }).map(
+          (_, index) => (
+            <div key={`empty-${index}`} />
+          )
+        )}
 
-          let bg: string = "transparent";
-          let col: string = COLORS.plum;
-          if (kind === "period") { bg = COLORS.rose; col = "#fff"; }
-          else if (kind === "fertile") bg = `${COLORS.gold}25`;
-          else if (kind === "predicted") bg = `${COLORS.rose}1E`;
-          else if (isSel) bg = `${COLORS.plum}12`;
+        {Array.from({ length: daysInMonth }).map(
+          (_, index) => {
+            const day = index + 1;
 
-          return (
-            <button
-              key={day}
-              onClick={() => setSelected(dateStr === selected ? null : dateStr)}
-              className="relative h-10 flex flex-col items-center justify-center rounded-full text-sm font-medium font-body transition-all"
-              style={{
-                background: bg,
-                color: col,
-                outline: isToday && kind !== "period" ? `2px solid ${COLORS.rose}` : "none",
-                outlineOffset: 2,
-              }}
-            >
-              {day}
-              {(kind === "fertile" || kind === "predicted") && (
-                <span
-                  className="absolute bottom-1 w-1 h-1 rounded-full"
-                  style={{ background: kind === "fertile" ? COLORS.gold : `${COLORS.rose}80` }}
-                />
-              )}
-            </button>
-          );
-        })}
+            const dateStr = toDateStr(
+              new Date(year, month, day)
+            );
+
+            const kind = classifyDate(
+              dateStr,
+              logs,
+              stats
+            );
+
+            const isToday = dateStr === todayStr;
+            const isSelected = selected === dateStr;
+
+            let background = "transparent";
+            let color : string = COLORS.plum;
+
+            if (kind === "period") {
+              background = COLORS.rose;
+              color = "#fff";
+            } else if (kind === "fertile") {
+              background = `${COLORS.gold}25`;
+            } else if (kind === "predicted") {
+              background = `${COLORS.rose}1E`;
+            } else if (isSelected) {
+              background = `${COLORS.plum}12`;
+            }
+
+            return (
+              <button
+                key={day}
+                onClick={() =>
+                  setSelected(
+                    isSelected ? null : dateStr
+                  )
+                }
+                className="relative h-10 flex flex-col items-center justify-center rounded-full text-sm font-medium font-body transition-all"
+                style={{
+                  background,
+                  color,
+                  outline:
+                    isToday && kind !== "period"
+                      ? `2px solid ${COLORS.rose}`
+                      : "none",
+                  outlineOffset: 2,
+                }}
+                aria-label={`Select ${dateStr}`}
+              >
+                {day}
+
+                {(kind === "fertile" ||
+                  kind === "predicted") && (
+                  <span
+                    className="absolute bottom-1 w-1 h-1 rounded-full"
+                    style={{
+                      background:
+                        kind === "fertile"
+                          ? COLORS.gold
+                          : `${COLORS.rose}80`,
+                    }}
+                  />
+                )}
+              </button>
+            );
+          }
+        )}
       </div>
 
       {/* Selected day actions */}
@@ -206,17 +364,34 @@ export default function TrackerPanel({ uid }: { uid: string }) {
             exit={{ opacity: 0, height: 0 }}
             className="mx-5 overflow-hidden"
           >
-            <div className="mt-3 p-3 rounded-xl flex items-center justify-between" style={{ background: `${COLORS.plum}08` }}>
-              <span className="text-xs font-body" style={{ color: COLORS.plum }}>
-                {selected}{logs.some((l) => l.startDate === selected) ? " · logged period start" : ""}
+            <div
+              className="mt-3 p-3 rounded-xl flex items-center justify-between"
+              style={{ background: `${COLORS.plum}08` }}
+            >
+              <span
+                className="text-xs font-body"
+                style={{ color: COLORS.plum }}
+              >
+                {selected}
+                {logs.some(
+                  (item) => item.startDate === selected
+                )
+                  ? " · logged period start"
+                  : ""}
               </span>
-              {logs.some((l) => l.startDate === selected) && (
+
+              {logs.some(
+                (item) => item.startDate === selected
+              ) && (
                 <button
-                  onClick={() => handleRemoveLog(selected)}
+                  onClick={() =>
+                    handleRemoveLog(selected)
+                  }
                   className="text-xs font-semibold flex items-center gap-1"
                   style={{ color: COLORS.rose }}
                 >
-                  <X size={12} /> Remove
+                  <X size={12} />
+                  Remove
                 </button>
               )}
             </div>
@@ -224,37 +399,63 @@ export default function TrackerPanel({ uid }: { uid: string }) {
         )}
       </AnimatePresence>
 
-      {/* Insight card */}
-      <div className="mx-5 mt-5 p-4 rounded-2xl" style={{ background: `${COLORS.moss}10`, border: `1px solid ${COLORS.moss}22` }}>
+      {/* Cycle insight card */}
+      <div
+        className="mx-5 mt-5 p-4 rounded-2xl"
+        style={{
+          background: `${COLORS.moss}10`,
+          border: `1px solid ${COLORS.moss}22`,
+        }}
+      >
         <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: COLORS.moss }}>
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: COLORS.moss }}
+          >
             <Leaf size={18} color="#fff" />
           </div>
+
           <div>
-            <p className="text-sm font-semibold font-body" style={{ color: COLORS.plum }}>
-              {stats.hasData ? stats.phaseLabel : "Log your first period"}
+            <p
+              className="text-sm font-semibold font-body"
+              style={{ color: COLORS.plum }}
+            >
+              {stats.hasData
+                ? stats.phaseLabel
+                : "Log your first period"}
             </p>
-            <p className="text-xs mt-0.5 leading-relaxed font-body" style={{ color: `${COLORS.plum}88` }}>
+
+            <p
+              className="text-xs mt-0.5 leading-relaxed font-body"
+              style={{ color: `${COLORS.plum}88` }}
+            >
               {stats.hasData
                 ? `Fertile window ${stats.fertileStart} – ${stats.fertileEnd}. Ovulation likely around ${stats.ovulationDate}. Next period predicted ${stats.nextPredicted} (${stats.daysUntilNextPeriod} day${stats.daysUntilNextPeriod === 1 ? "" : "s"} away). Based on a ${stats.avgCycleLength}-day average cycle.`
-                : "Tap \"Log today's flow\" whenever your period starts. After two logs, herLoop starts predicting your cycle."}
+                : 'Tap "Log today\'s flow" whenever your period starts. After two logs, herLoop starts predicting your cycle.'}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Log button */}
+      {/* Log period button */}
       <div className="px-5 mt-4">
         <button
-          onClick={() => { setLogDate(todayStr); setLogOpen(true); }}
+          onClick={() => {
+            setLogDate(todayStr);
+            setLogOpen(true);
+          }}
           className="w-full py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 transition-transform active:scale-95 font-body"
-          style={{ background: COLORS.rose, color: "#fff" }}
+          style={{
+            background: COLORS.rose,
+            color: "#fff",
+          }}
         >
-          <Heart size={16} /> Log today's flow
+          <Heart size={16} />
+          Log today's flow
         </button>
       </div>
 
-      {/* Log modal */}
+      {/* Log period modal */}
       <AnimatePresence>
         {logOpen && (
           <motion.div
@@ -269,39 +470,80 @@ export default function TrackerPanel({ uid }: { uid: string }) {
               initial={{ y: 60, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 60, opacity: 0 }}
-              transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              onClick={(e) => e.stopPropagation()}
+              transition={{
+                type: "spring",
+                damping: 28,
+                stiffness: 320,
+              }}
+              onClick={(event) => event.stopPropagation()}
             >
-              <h3 className="font-display text-lg mb-4" style={{ color: COLORS.plum }}>Log period start</h3>
-              <label className="text-xs font-semibold font-body block mb-1.5" style={{ color: `${COLORS.plum}88` }}>Start date</label>
+              <h3
+                className="font-display text-lg mb-4"
+                style={{ color: COLORS.plum }}
+              >
+                Log period start
+              </h3>
+
+              <label
+                className="text-xs font-semibold font-body block mb-1.5"
+                style={{ color: `${COLORS.plum}88` }}
+              >
+                Start date
+              </label>
+
               <input
                 type="date"
                 value={logDate}
-                onChange={(e) => setLogDate(e.target.value)}
+                onChange={(event) =>
+                  setLogDate(event.target.value)
+                }
                 className="w-full px-4 py-3 rounded-xl border font-body text-sm mb-4"
-                style={{ borderColor: COLORS.mist, background: COLORS.cream }}
+                style={{
+                  borderColor: COLORS.mist,
+                  background: COLORS.cream,
+                }}
               />
-              <label className="text-xs font-semibold font-body block mb-1.5" style={{ color: `${COLORS.plum}88` }}>Flow</label>
+
+              <label
+                className="text-xs font-semibold font-body block mb-1.5"
+                style={{ color: `${COLORS.plum}88` }}
+              >
+                Flow
+              </label>
+
               <div className="flex gap-2 mb-6">
-                {(["light", "medium", "heavy"] as FlowLevel[]).map((f) => (
+                {(
+                  ["light", "medium", "heavy"] as FlowLevel[]
+                ).map((level) => (
                   <button
-                    key={f}
-                    onClick={() => setFlow(f)}
+                    key={level}
+                    onClick={() => setFlow(level)}
                     className="flex-1 py-2.5 rounded-xl text-xs font-semibold capitalize font-body transition-colors"
                     style={{
-                      background: flow === f ? COLORS.rose : `${COLORS.plum}0A`,
-                      color: flow === f ? "#fff" : COLORS.plum,
+                      background:
+                        flow === level
+                          ? COLORS.rose
+                          : `${COLORS.plum}0A`,
+                      color:
+                        flow === level
+                          ? "#fff"
+                          : COLORS.plum,
                     }}
                   >
-                    {f}
+                    {level}
                   </button>
                 ))}
               </div>
+
               <button
                 onClick={handleLogSubmit}
                 disabled={saving}
                 className="w-full py-3.5 rounded-2xl font-semibold text-sm font-body"
-                style={{ background: COLORS.plum, color: "#fff", opacity: saving ? 0.7 : 1 }}
+                style={{
+                  background: COLORS.plum,
+                  color: "#fff",
+                  opacity: saving ? 0.7 : 1,
+                }}
               >
                 {saving ? "Saving..." : "Save log"}
               </button>

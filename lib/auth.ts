@@ -3,6 +3,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 
 import {
@@ -19,9 +20,18 @@ import {
 } from "firebase/firestore";
 
 import { app } from "./firebaseConfig";
+import { calculateAge, getCurrentTier } from "./age";
 
 const auth = getAuth(app);
 const db = getFirestore(app);
+
+// ===============================
+// PASSWORD RESET
+// ===============================
+
+export async function sendResetEmail(email: string) {
+  await sendPasswordResetEmail(auth, email);
+}
 
 export type AccountTier = "under10" | "teen" | "adult";
 
@@ -40,7 +50,6 @@ export async function createAccount({
   password,
   name,
 }: CreateAccountInput) {
-  // Create Firebase Authentication account
   const credential = await createUserWithEmailAndPassword(
     auth,
     email,
@@ -52,7 +61,6 @@ export async function createAccount({
   // DO NOT send email verification
   // User can go directly to dashboard.
 
-  // Save user information in Firestore
   await setDoc(doc(db, "users", uid), {
     name,
     email,
@@ -97,8 +105,6 @@ export async function signOutUser() {
 // ===============================
 // EMAIL VERIFICATION
 // ===============================
-// Kept only so old pages don't cause import errors.
-// It is NOT used during signup.
 
 export async function resendVerificationEmail() {
   return;
@@ -170,6 +176,8 @@ export async function requestTeenApproval(
   teenUid: string,
   parentEmail: string
 ) {
+  const token = crypto.randomUUID();
+
   await updateDoc(doc(db, "users", teenUid), {
     role: "teen_pending",
     tier: "teen",
@@ -180,8 +188,11 @@ export async function requestTeenApproval(
     guardianEmail: parentEmail,
     tier: "teen",
     consentStatus: "pending",
+    approvalToken: token,
     linkedAt: serverTimestamp(),
   });
+
+  return token;
 }
 
 // ===============================
@@ -248,4 +259,29 @@ export async function updateProfileField(
   await updateDoc(doc(db, "users", uid), {
     [field]: value,
   });
+}
+
+// ===============================
+// SYNC USER LIFECYCLE
+// ===============================
+
+export async function syncUserLifecycle(
+  uid: string,
+  dateOfBirth: string
+) {
+  const currentAge = calculateAge(dateOfBirth);
+  const currentTier = getCurrentTier(currentAge);
+
+  const userRef = doc(db, "users", uid);
+
+  await updateDoc(userRef, {
+    age: currentAge,
+    tier: currentTier,
+    role: currentAge >= 18 ? "adult" : "child",
+  });
+
+  return {
+    age: currentAge,
+    tier: currentTier,
+  };
 }
