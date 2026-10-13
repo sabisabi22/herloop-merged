@@ -1,284 +1,324 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-
+import { useEffect, useMemo, useState } from "react";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getFirestore,
+  onSnapshot,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import {
   BookOpen,
-  Sparkles,
-  HeartPulse,
-  GraduationCap,
   Search,
   Bookmark,
-  ChevronDown,
-  Clock,
+  ExternalLink,
+  HeartPulse,
+  GraduationCap,
   Shield,
   Wallet,
   Users,
+  Sparkles,
+  Clock,
+  LoaderCircle,
 } from "lucide-react";
 
 import type { AccountTier } from "@/lib/auth";
+import { app } from "@/lib/firebaseConfig";
 import { COLORS } from "@/lib/theme";
 
-type Phase =
-  | "Childhood"
-  | "Teen"
-  | "Adult"
-  | "Maternity"
-  | "Elder";
+type Phase = "Childhood" | "Teen" | "Adult" | "Maternity" | "Elder";
 
-type Topic = {
+type Category =
+  | "Health"
+  | "Education"
+  | "Safety"
+  | "Finance"
+  | "Maternity"
+  | "Wellbeing";
+
+type Article = {
+  id: string;
   title: string;
-  desc: string;
-  content: string;
+  description: string;
+  category: Category;
+  url: string;
+  readMins: number;
+  phases: Phase[];
   Icon: typeof BookOpen;
   color: string;
-  phases: Phase[];
-  readMins: number;
 };
 
-const TOPICS: Topic[] = [
+const db = getFirestore(app);
+
+const ARTICLES: Article[] = [
   {
+    id: "understanding-your-cycle",
     title: "Understanding your cycle",
-    desc: "Learn the basics of periods, cycle changes, and what is normal.",
-    content:
-      "Your menstrual cycle can change during the teenage years while your body is still developing. Periods may not always arrive on the exact same day each month. Tracking your cycle can help you understand your own pattern and notice changes that may need attention.",
+    description:
+      "Learn about menstrual health and understand the changes your body goes through.",
+    category: "Health",
+    url: "https://www.who.int/news-room/fact-sheets/detail/menstrual-health",
+    readMins: 5,
+    phases: ["Teen", "Adult"],
     Icon: HeartPulse,
     color: COLORS.rose,
-    phases: ["Teen", "Adult"],
-    readMins: 4,
   },
-
   {
-    title: "Nutrition through your cycle",
-    desc: "Simple nutrition habits to support energy and wellbeing.",
-    content:
-      "A balanced diet with vegetables, fruits, whole grains, protein, and enough water can support your energy. During periods, iron-rich foods can be especially useful. Try to maintain regular meals rather than skipping them.",
+    id: "starting-your-periods",
+    title: "Puberty, explained simply",
+    description:
+      "Understand periods, puberty, what to expect, and how to prepare for your first period.",
+    category: "Health",
+    url: "https://www.nhs.uk/conditions/periods/starting-periods/",
+    readMins: 4,
+    phases: ["Childhood", "Teen"],
     Icon: Sparkles,
     color: COLORS.gold,
-    phases: ["Teen", "Adult", "Maternity"],
-    readMins: 4,
   },
-
   {
+    id: "talking-about-periods",
+    title: "Talking about periods",
+    description:
+      "Helpful guidance for making conversations about periods easier at home.",
+    category: "Health",
+    url: "https://www.unicef.org/parenting/health/talking-about-periods-at-home",
+    readMins: 5,
+    phases: ["Childhood", "Teen"],
+    Icon: Users,
+    color: COLORS.rose,
+  },
+  {
+    id: "menstrual-health-guidance",
+    title: "When to see a doctor",
+    description:
+      "Explore menstrual health guidance and learn when to seek professional advice.",
+    category: "Health",
+    url: "https://www.nhs.uk/conditions/periods/period-problems/",
+    readMins: 5,
+    phases: ["Teen", "Adult"],
+    Icon: HeartPulse,
+    color: COLORS.rose,
+  },
+  {
+    id: "education-support",
     title: "Scholarships & education loans",
-    desc: "Understand common ways students can get financial support.",
-    content:
-      "Students may have access to scholarships, fee assistance, education loans, and other financial-support programs. Check eligibility requirements, application deadlines, required documents, and official sources before applying.",
+    description:
+      "Explore education resources and opportunities to support your studies.",
+    category: "Education",
+    url: "https://scholarships.gov.in/",
+    readMins: 4,
+    phases: ["Teen", "Adult"],
     Icon: GraduationCap,
     color: COLORS.moss,
-    phases: ["Teen"],
-    readMins: 3,
   },
-
   {
-    title: "When to see a doctor",
-    desc: "Know when a health concern should be discussed with a professional.",
-    content:
-      "Some changes during adolescence are normal, but persistent or severe pain, unusually heavy bleeding, fainting, or other concerning symptoms should be discussed with a qualified healthcare professional.",
-    Icon: HeartPulse,
-    color: COLORS.rose,
-    phases: ["Teen", "Adult", "Maternity", "Elder"],
-    readMins: 4,
-  },
-
-  {
-    title: "Puberty, explained simply",
-    desc: "Understand the physical and emotional changes during puberty.",
-    content:
-      "Puberty is a normal stage of development. Changes can include growth, body shape changes, skin changes, body hair, periods, and emotional changes. Everyone develops at a different pace, so comparing yourself with friends is not always useful.",
-    Icon: Sparkles,
-    color: COLORS.gold,
-    phases: ["Childhood", "Teen"],
-    readMins: 4,
-  },
-
-  {
-    title: "Staying safe: know the warning signs",
-    desc: "Learn simple habits for personal safety and seeking help.",
-    content:
-      "Trust your instincts when a situation feels unsafe. Stay connected with trusted people, avoid sharing sensitive personal information unnecessarily, and seek help from a trusted adult or appropriate authority when you feel threatened or uncomfortable.",
-    Icon: Shield,
-    color: COLORS.rose,
-    phases: ["Childhood", "Teen", "Adult"],
-    readMins: 3,
-  },
-
-  {
+    id: "financial-literacy",
     title: "Building financial independence",
-    desc: "Start learning practical money habits early.",
-    content:
-      "Learning how to budget, save, understand bank accounts, and make informed spending decisions can help build financial confidence. Starting with small habits can make managing money easier later.",
+    description:
+      "Learn the basics of saving, budgeting, and managing money.",
+    category: "Finance",
+    url: "https://www.rbi.org.in/financialeducation/",
+    readMins: 4,
+    phases: ["Teen", "Adult"],
     Icon: Wallet,
     color: COLORS.moss,
+  },
+  {
+    id: "womens-support",
+    title: "Staying safe: know the warning signs",
+    description:
+      "Find official information about women's support and government initiatives in India.",
+    category: "Safety",
+    url: "https://www.childlineindia.org.in/",
+    readMins: 5,
+    phases: ["Teen", "Adult", "Maternity"],
+    Icon: Shield,
+    color: COLORS.rose,
+  },
+  {
+    id: "nutrition-through-your-cycle",
+    title: "Nutrition through your cycle",
+    description:
+      "Explore balanced eating guidance to support your general health and wellbeing.",
+    category: "Wellbeing",
+    url: "https://www.nhs.uk/live-well/eat-well/",
+    readMins: 3,
     phases: ["Teen", "Adult"],
-    readMins: 4,
+    Icon: HeartPulse,
+    color: COLORS.gold,
   },
-
   {
-    title: "Pregnancy basics",
-    desc: "Understand pregnancy, prenatal care, and common changes.",
-    content:
-      "Pregnancy involves major physical and emotional changes. Prenatal care helps monitor the health of both the pregnant person and baby. Questions or concerns should be discussed with a qualified healthcare professional.",
+    id: "pregnancy-care",
+    title: "Pregnancy and prenatal care",
+    description:
+      "Explore trusted health information and resources for pregnancy.",
+    category: "Maternity",
+    url: "https://www.who.int/health-topics/maternal-health",
+    readMins: 5,
+    phases: ["Maternity"],
     Icon: HeartPulse,
     color: COLORS.rose,
-    phases: ["Maternity"],
-    readMins: 4,
   },
-
   {
-    title: "Postpartum recovery & support",
-    desc: "Learn about recovery and support after childbirth.",
-    content:
-      "Recovery after childbirth takes time. Rest, nutrition, emotional support, and appropriate medical follow-up are important. New or severe physical or emotional symptoms should be discussed with a healthcare professional.",
-    Icon: HeartPulse,
-    color: COLORS.rose,
-    phases: ["Maternity"],
-    readMins: 4,
-  },
-
-  {
-    title: "Healthy aging & menopause",
-    desc: "Understand common changes during menopause and later life.",
-    content:
-      "Menopause is a natural stage of life. Changes can include menstrual changes, hot flashes, sleep changes, and mood changes. Support and medical advice can help when symptoms affect daily life.",
+    id: "healthy-aging",
+    title: "Healthy aging and wellbeing",
+    description:
+      "Explore information about healthy aging and wellbeing.",
+    category: "Wellbeing",
+    url: "https://www.who.int/health-topics/ageing",
+    readMins: 5,
+    phases: ["Adult", "Elder"],
     Icon: Users,
     color: COLORS.gold,
-    phases: ["Elder"],
-    readMins: 4,
-  },
-
-  {
-    title: "Staying connected in later life",
-    desc: "Community, caregiving support, and avoiding isolation.",
-    content:
-      "Regular contact with family, friends, neighbours, or community groups can support wellbeing in later life. Building a support network can also help caregivers manage responsibilities and avoid burnout.",
-    Icon: Users,
-    color: COLORS.moss,
-    phases: ["Elder"],
-    readMins: 3,
   },
 ];
 
-const BOOKMARKS_KEY = "herloop_saved_topics";
+const CATEGORIES = [
+  "All",
+  "Health",
+  "Education",
+  "Safety",
+  "Finance",
+  "Maternity",
+  "Wellbeing",
+  "Saved",
+] as const;
+
+type FilterCategory = (typeof CATEGORIES)[number];
 
 function getLifecyclePhase(tier: AccountTier): Phase {
-  if (tier === "under10") {
-    return "Childhood";
-  }
-
-  if (tier === "teen") {
-    return "Teen";
-  }
-
+  if (tier === "under10") return "Childhood";
+  if (tier === "teen") return "Teen";
   return "Adult";
 }
 
 export default function LearnPanel({
+  uid,
   tier,
 }: {
+  uid: string;
   tier?: AccountTier;
 }) {
-  /*
-   * The dashboard passes the user's current account tier.
-   *
-   * Teen  -> Teen
-   * under10 -> Childhood
-   * adult -> Adult
-   */
   const effectiveTier: AccountTier = tier ?? "adult";
-
   const lifecyclePhase = getLifecyclePhase(effectiveTier);
 
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [saved, setSaved] = useState<string[]>([]);
+  const [category, setCategory] = useState<FilterCategory>("All");
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [bookmarkError, setBookmarkError] = useState("");
 
+  // Load this user's saved articles from Firestore.
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(BOOKMARKS_KEY);
-
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-
-        if (Array.isArray(parsed)) {
-          setSaved(
-            parsed.filter(
-              (item): item is string => typeof item === "string"
-            )
-          );
-        }
-      }
-    } catch {
-      // Ignore localStorage errors.
+    if (!uid) {
+      setSavedIds([]);
+      setLoadingBookmarks(false);
+      return;
     }
-  }, []);
 
-  function toggleSaved(title: string) {
-    setSaved((previousSaved: string[]) => {
-      const nextSaved = previousSaved.includes(title)
-        ? previousSaved.filter((item: string) => item !== title)
-        : [...previousSaved, title];
+    setLoadingBookmarks(true);
+    setBookmarkError("");
 
-      try {
-        window.localStorage.setItem(
-          BOOKMARKS_KEY,
-          JSON.stringify(nextSaved)
+    const bookmarksRef = collection(db, "users", uid, "bookmarks");
+
+    const unsubscribe = onSnapshot(
+      bookmarksRef,
+      (snapshot) => {
+        setSavedIds(snapshot.docs.map((item) => item.id));
+        setLoadingBookmarks(false);
+      },
+      (error) => {
+        console.error("Could not load Learn bookmarks:", error);
+        setBookmarkError(
+          "Bookmarks could not be loaded. Check your connection or account permissions."
         );
-      } catch {
-        // Ignore localStorage errors.
+        setLoadingBookmarks(false);
       }
+    );
 
-      return nextSaved;
-    });
+    return () => unsubscribe();
+  }, [uid]);
+
+  async function toggleBookmark(article: Article) {
+    if (!uid || savingId) return;
+
+    setSavingId(article.id);
+    setBookmarkError("");
+
+    const bookmarkRef = doc(
+      db,
+      "users",
+      uid,
+      "bookmarks",
+      article.id
+    );
+
+    try {
+      if (savedIds.includes(article.id)) {
+        await deleteDoc(bookmarkRef);
+      } else {
+        await setDoc(bookmarkRef, {
+          articleId: article.id,
+          title: article.title,
+          url: article.url,
+          category: article.category,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      console.error("Could not update bookmark:", error);
+      setBookmarkError(
+        "Could not update your bookmark. Check your Firestore rules and try again."
+      );
+    } finally {
+      setSavingId(null);
+    }
   }
 
-  /*
-   * IMPORTANT:
-   *
-   * We ALWAYS filter by lifecyclePhase first.
-   *
-   * Therefore a Teen user can never see:
-   * - Maternity
-   * - Elder
-   * - Adult-only
-   * - Childhood-only
-   *
-   * even if the search box is used.
-   */
-  const lifecycleTopics = TOPICS.filter((topic) =>
-    topic.phases.includes(lifecyclePhase)
+  const lifecycleArticles = useMemo(
+    () =>
+      ARTICLES.filter((article) =>
+        article.phases.includes(lifecyclePhase)
+      ),
+    [lifecyclePhase]
   );
 
-  const filteredTopics = lifecycleTopics.filter((topic) => {
-    const searchText = query.trim().toLowerCase();
+  const filteredArticles = useMemo(() => {
+    const search = query.trim().toLowerCase();
 
-    if (!searchText) {
-      return true;
-    }
+    return lifecycleArticles.filter((article) => {
+      const matchesSearch =
+        !search ||
+        article.title.toLowerCase().includes(search) ||
+        article.description.toLowerCase().includes(search) ||
+        article.category.toLowerCase().includes(search);
 
-    return (
-      topic.title.toLowerCase().includes(searchText) ||
-      topic.desc.toLowerCase().includes(searchText) ||
-      topic.content.toLowerCase().includes(searchText)
-    );
-  });
+      const matchesCategory =
+        category === "All" ||
+        (category === "Saved" && savedIds.includes(article.id)) ||
+        article.category === category;
+
+      return matchesSearch && matchesCategory;
+    });
+  }, [lifecycleArticles, query, category, savedIds]);
 
   return (
-    <div className="pb-6">
+    <section className="pb-8">
       {/* Header */}
-      <div className="px-5 pt-5 pb-4">
-        <div className="flex items-center gap-2">
+      <div className="px-5 pt-6 pb-5">
+        <div className="flex items-center gap-3">
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm"
             style={{
-              background: `${COLORS.rose}18`,
+              background: `linear-gradient(135deg, ${COLORS.rose}22, ${COLORS.plum}18)`,
             }}
           >
-            <BookOpen
-              size={18}
-              style={{ color: COLORS.rose }}
-            />
+            <BookOpen size={22} style={{ color: COLORS.rose }} />
           </div>
 
           <div>
@@ -286,50 +326,50 @@ export default function LearnPanel({
               className="font-display text-lg"
               style={{ color: COLORS.plum }}
             >
-              Learn
+              Learning resources
             </h2>
-
             <p
-              className="text-xs font-body mt-0.5"
+              className="mt-0.5 text-xs font-body"
               style={{ color: `${COLORS.plum}77` }}
             >
-              Guidance for your current life stage
+              Guidance for your {lifecyclePhase.toLowerCase()} stage
             </p>
           </div>
         </div>
       </div>
 
-      {/* Current lifecycle */}
-      <div className="px-5 mb-4">
+      {/* Lifecycle card */}
+      <div className="mb-4 px-5">
         <div
-          className="rounded-2xl px-4 py-3"
+          className="rounded-2xl px-4 py-4 shadow-sm"
           style={{
-            background: `${COLORS.rose}10`,
-            border: `1px solid ${COLORS.rose}18`,
+            background: `linear-gradient(135deg, ${COLORS.rose}12, ${COLORS.plum}0A)`,
+            border: `1px solid ${COLORS.rose}30`,
           }}
         >
           <p
-            className="text-[10px] uppercase tracking-wider font-semibold"
-            style={{ color: `${COLORS.plum}66` }}
+            className="text-[10px] font-semibold uppercase tracking-wider"
+            style={{ color: `${COLORS.plum}77` }}
           >
             Your learning stage
           </p>
 
-          <div className="flex items-center justify-between mt-1">
+          <div className="mt-2 flex items-center justify-between">
             <p
-              className="text-sm font-semibold font-body"
+              className="text-sm font-semibold"
               style={{ color: COLORS.plum }}
             >
               {lifecyclePhase}
             </p>
 
             <span
-              className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+              className="rounded-full px-3 py-1 text-[10px] font-semibold"
               style={{
-                background: `${COLORS.rose}18`,
+                background: `linear-gradient(135deg, ${COLORS.rose}20, ${COLORS.plum}18)`,
                 color: COLORS.rose,
               }}
             >
+              <Sparkles size={11} className="mr-1 inline" />
               Personalised
             </span>
           </div>
@@ -337,262 +377,278 @@ export default function LearnPanel({
       </div>
 
       {/* Search */}
-      <div className="px-5 mb-4">
+      <div className="mb-4 px-5">
         <div
-          className="flex items-center gap-2 rounded-2xl px-4 py-3 bg-white"
+          className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-sm transition focus-within:ring-2"
           style={{
             border: `1px solid ${COLORS.mist}`,
+            boxShadow: `0 3px 12px ${COLORS.plum}08`,
           }}
         >
-          <Search
-            size={16}
-            style={{ color: `${COLORS.plum}55` }}
-          />
+          <Search size={17} style={{ color: COLORS.rose }} />
 
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder={`Search ${lifecyclePhase.toLowerCase()} topics...`}
-            className="flex-1 outline-none bg-transparent text-sm font-body"
+            placeholder="Search topics..."
+            aria-label="Search Learn articles"
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
             style={{ color: COLORS.plum }}
           />
+
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Clear search"
+              className="text-xs font-semibold"
+              style={{ color: COLORS.rose }}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Topic count */}
-      <div className="px-5 mb-3">
-        <p
-          className="text-xs font-body"
-          style={{ color: `${COLORS.plum}66` }}
-        >
-          {filteredTopics.length} topic
-          {filteredTopics.length === 1 ? "" : "s"} for your stage
-        </p>
+      {/* Category filters */}
+      <div className="mb-4 px-5">
+        <div className="flex gap-2 overflow-x-auto pb-2">
+          {CATEGORIES.map((item) => {
+            const active = category === item;
+
+            return (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setCategory(item)}
+                aria-pressed={active}
+                className="flex-shrink-0 rounded-full px-4 py-2.5 text-xs font-semibold transition duration-200 hover:-translate-y-0.5"
+                style={{
+                  background: active
+                    ? `linear-gradient(135deg, ${COLORS.rose}, ${COLORS.plum})`
+                    : "#ffffff",
+                  color: active ? "#ffffff" : COLORS.plum,
+                  border: `1px solid ${
+                    active ? COLORS.rose : COLORS.mist
+                  }`,
+                  boxShadow: active
+                    ? `0 3px 10px ${COLORS.rose}30`
+                    : "none",
+                }}
+              >
+                {item === "Saved" ? "★ Saved" : item}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Topics */}
-      <div className="px-5 flex flex-col gap-3">
-        {filteredTopics.map((topic, index) => {
-          const isOpen = expanded === topic.title;
-          const isSaved = saved.includes(topic.title);
+      {/* Article count and bookmark status */}
+      <div className="mb-3 px-5">
+        <div className="flex items-center justify-between gap-2">
+          <p
+            className="text-xs font-medium"
+            style={{ color: `${COLORS.plum}88` }}
+          >
+            {filteredArticles.length} topic
+            {filteredArticles.length === 1 ? "" : "s"} for your stage
+          </p>
 
-          return (
-            <motion.div
-              key={topic.title}
-              initial={{
-                opacity: 0,
-                y: 10,
-              }}
-              animate={{
-                opacity: 1,
-                y: 0,
-              }}
-              transition={{
-                delay: index * 0.04,
-                duration: 0.25,
-              }}
-              className="rounded-2xl bg-white shadow-soft overflow-hidden"
+          {category === "Saved" && (
+            <span
+              className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
               style={{
-                border: `1px solid ${COLORS.mist}`,
+                background: `${COLORS.rose}15`,
+                color: COLORS.rose,
               }}
             >
-              {/* Topic header */}
-              <button
-                onClick={() =>
-                  setExpanded(isOpen ? null : topic.title)
-                }
-                className="w-full flex items-center gap-3 p-4 text-left"
-              >
+              Bookmarked
+            </span>
+          )}
+        </div>
+
+        {loadingBookmarks && (
+          <p
+            className="mt-2 flex items-center gap-2 text-xs"
+            style={{ color: `${COLORS.plum}77` }}
+          >
+            <LoaderCircle size={13} className="animate-spin" />
+            Loading your saved articles...
+          </p>
+        )}
+
+        {bookmarkError && (
+          <p className="mt-2 text-xs text-red-600" role="alert">
+            {bookmarkError}
+          </p>
+        )}
+      </div>
+
+      {/* Article cards */}
+      <div className="flex flex-col gap-3 px-5">
+        {filteredArticles.map((article) => {
+          const isSaved = savedIds.includes(article.id);
+          const isSaving = savingId === article.id;
+
+          return (
+            <article
+              key={article.id}
+              className="rounded-2xl bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              style={{
+                border: `1px solid ${COLORS.mist}`,
+                boxShadow: `0 4px 16px ${COLORS.plum}08`,
+              }}
+            >
+              <div className="flex gap-3">
                 <div
-                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl"
                   style={{
-                    background: `${topic.color}18`,
+                    background: `linear-gradient(135deg, ${article.color}24, ${COLORS.plum}0A)`,
                   }}
                 >
-                  <topic.Icon
-                    size={18}
-                    style={{ color: topic.color }}
+                  <article.Icon
+                    size={20}
+                    style={{ color: article.color }}
                   />
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <h3
-                    className="font-semibold text-sm font-body"
-                    style={{ color: COLORS.plum }}
-                  >
-                    {topic.title}
-                  </h3>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className="text-sm font-semibold leading-5"
+                      style={{ color: COLORS.plum }}
+                    >
+                      {article.title}
+                    </h3>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleBookmark(article)}
+                      disabled={Boolean(savingId) || !uid}
+                      aria-label={
+                        isSaved
+                          ? `Remove ${article.title} from saved articles`
+                          : `Save ${article.title}`
+                      }
+                      title={isSaved ? "Remove bookmark" : "Save article"}
+                      className="flex-shrink-0 rounded-xl p-2 transition hover:bg-rose-50 disabled:opacity-50"
+                      style={{ color: COLORS.rose }}
+                    >
+                      {isSaving ? (
+                        <LoaderCircle
+                          size={18}
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <Bookmark
+                          size={18}
+                          fill={isSaved ? COLORS.rose : "none"}
+                        />
+                      )}
+                    </button>
+                  </div>
 
                   <p
-                    className="text-xs font-body mt-0.5 line-clamp-2"
-                    style={{ color: `${COLORS.plum}70` }}
+                    className="mt-1 text-xs leading-5"
+                    style={{ color: `${COLORS.plum}99` }}
                   >
-                    {topic.desc}
+                    {article.description}
                   </p>
 
-                  <div className="flex items-center gap-1 mt-2">
-                    <Clock
-                      size={11}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span
+                      className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
                       style={{
-                        color: `${COLORS.plum}55`,
+                        color: article.color,
+                        background: `${article.color}15`,
                       }}
-                    />
+                    >
+                      {article.category}
+                    </span>
 
                     <span
-                      className="text-[10px] font-body"
-                      style={{
-                        color: `${COLORS.plum}55`,
-                      }}
+                      className="flex items-center gap-1 text-[10px]"
+                      style={{ color: `${COLORS.plum}80` }}
                     >
-                      {topic.readMins} min read
+                      <Clock size={11} />
+                      {article.readMins} min read
                     </span>
+
+                    {isSaved && (
+                      <span
+                        className="flex items-center gap-1 text-[10px] font-semibold"
+                        style={{ color: COLORS.rose }}
+                      >
+                        <Bookmark size={10} fill={COLORS.rose} />
+                        Saved
+                      </span>
+                    )}
                   </div>
-                </div>
 
-                <motion.div
-                  animate={{
-                    rotate: isOpen ? 180 : 0,
-                  }}
-                  transition={{
-                    duration: 0.2,
-                  }}
-                  className="flex-shrink-0"
-                >
-                  <ChevronDown
-                    size={17}
+                  {/* Read full article link */}
+                  <a
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Read ${article.title} on its original website (opens in a new tab)`}
+                    className="mt-4 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition hover:opacity-80"
                     style={{
-                      color: `${COLORS.plum}66`,
-                    }}
-                  />
-                </motion.div>
-              </button>
-
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{
-                      height: 0,
-                      opacity: 0,
-                    }}
-                    animate={{
-                      height: "auto",
-                      opacity: 1,
-                    }}
-                    exit={{
-                      height: 0,
-                      opacity: 0,
-                    }}
-                    transition={{
-                      duration: 0.2,
+                      color: COLORS.rose,
+                      background: `linear-gradient(135deg, ${COLORS.rose}12, ${COLORS.plum}0A)`,
                     }}
                   >
-                    <div
-                      className="px-4 pb-4 pt-1"
-                      style={{
-                        borderTop: `1px solid ${COLORS.mist}`,
-                      }}
-                    >
-                      <p
-                        className="text-sm font-body leading-6"
-                        style={{
-                          color: `${COLORS.plum}B0`,
-                        }}
-                      >
-                        {topic.content}
-                      </p>
-
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className="text-[10px] font-semibold px-2 py-1 rounded-full"
-                            style={{
-                              background: `${topic.color}15`,
-                              color: topic.color,
-                            }}
-                          >
-                            {lifecyclePhase}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            toggleSaved(topic.title)
-                          }
-                          className="flex items-center gap-1.5 text-xs font-semibold"
-                          style={{
-                            color: isSaved
-                              ? COLORS.rose
-                              : `${COLORS.plum}70`,
-                          }}
-                        >
-                          <Bookmark
-                            size={14}
-                            fill={
-                              isSaved
-                                ? COLORS.rose
-                                : "none"
-                            }
-                          />
-
-                          {isSaved ? "Saved" : "Save"}
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.div>
+                    Read full article
+                    <ExternalLink size={13} />
+                  </a>
+                </div>
+              </div>
+            </article>
           );
         })}
       </div>
 
-      {/* Empty search state */}
-      {filteredTopics.length === 0 && (
-        <div className="px-5">
+      {/* Empty state */}
+      {!loadingBookmarks && filteredArticles.length === 0 && (
+        <div
+          className="mx-5 mt-2 rounded-2xl bg-white p-6 text-center shadow-sm"
+          style={{ border: `1px solid ${COLORS.mist}` }}
+        >
           <div
-            className="rounded-2xl bg-white p-6 text-center"
+            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
             style={{
-              border: `1px solid ${COLORS.mist}`,
+              background: `linear-gradient(135deg, ${COLORS.rose}20, ${COLORS.plum}15)`,
             }}
           >
-            <Search
-              size={24}
-              className="mx-auto mb-2"
-              style={{
-                color: `${COLORS.plum}45`,
-              }}
-            />
-
-            <p
-              className="text-sm font-semibold font-body"
-              style={{
-                color: COLORS.plum,
-              }}
-            >
-              No topics found
-            </p>
-
-            <p
-              className="text-xs font-body mt-1"
-              style={{
-                color: `${COLORS.plum}66`,
-              }}
-            >
-              Try another search for your {lifecyclePhase.toLowerCase()} stage.
-            </p>
+            <BookOpen size={24} style={{ color: COLORS.rose }} />
           </div>
+
+          <p
+            className="text-sm font-semibold"
+            style={{ color: COLORS.plum }}
+          >
+            {category === "Saved"
+              ? "No saved articles yet"
+              : "No articles found"}
+          </p>
+
+          <p
+            className="mt-1 text-xs leading-5"
+            style={{ color: `${COLORS.plum}88` }}
+          >
+            {category === "Saved"
+              ? "Tap the bookmark icon on an article to save it here."
+              : "Try another search or choose a different category."}
+          </p>
         </div>
       )}
 
-      {/* Footer */}
       <p
-        className="text-[11px] font-body text-center mt-5 px-8"
-        style={{
-          color: `${COLORS.plum}55`,
-        }}
+        className="mt-6 px-8 text-center text-[11px] leading-5"
+        style={{ color: `${COLORS.plum}77` }}
       >
-        More personalised articles and resources are coming soon.
+        Articles open on their original websites. Information is
+        educational and does not replace professional advice.
       </p>
-    </div>
+    </section>
   );
 }
