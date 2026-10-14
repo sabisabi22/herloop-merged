@@ -38,7 +38,7 @@ import BottomNav, {
 
 import TrackerPanel from "@/components/dashboard/TrackerPanel";
 import SchemesPanel from "@/components/dashboard/SchemesPanel";
-import LearnPanel from "@/components/dashboard/LearnPanel";
+import LearnAndGrowPanel from "@/components/dashboard/LearnAndGrowPanel";
 import ManagePanel from "@/components/dashboard/ManagePanel";
 import ProfilePanel from "@/components/dashboard/ProfilePanel";
 import HerLoopChat from "@/components/dashboard/HerLoopChat";
@@ -641,7 +641,7 @@ export default function Dashboard() {
             )}
 
             {activeTab === "learn" && (
-              <LearnPanel uid={uid} tier={currentTier} />
+              <LearnAndGrowPanel uid={uid} tier={currentTier} />
             )}
 
             {activeTab === "profile" && (

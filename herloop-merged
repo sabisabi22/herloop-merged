@@ -1,0 +1,11 @@
+app/dashboard/page.tsx
+app/login/page.tsx
+app/onboarding/page.tsx
+app/signup/page.tsx
+components/dashboard/LearnPanel.tsx
+components/dashboard/MotivationCard.tsx
+components/dashboard/TrackerPanel.tsx
+lib/auth.ts
+lib/firebaseConfig.ts
+package-lock.json
+package.json

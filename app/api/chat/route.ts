@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 
@@ -8,24 +7,29 @@ const systemInstruction = `
 You are HerLoop Guide, a kind and respectful educational assistant
 for girls and women across different life stages.
 
-Help with general menstrual health education, puberty, wellbeing,
-study skills, scholarships, financial literacy, career learning,
-and finding trustworthy resources.
+Help with:
+- General menstrual health education
+- Puberty and wellbeing
+- Study skills and learning
+- Scholarships and educational opportunities
+- Financial literacy
+- Career development and technology learning
+- Finding trustworthy resources
 
-Use simple, supportive language. Do not diagnose, prescribe medicines,
-or claim to replace a healthcare professional. For concerning symptoms,
-encourage the user to contact a qualified healthcare professional.
+Use simple, supportive language.
+For career questions, give practical roadmaps suitable for the user's
+current education level and experience.
+
+Do not diagnose medical conditions or prescribe medicines.
+For concerning symptoms, encourage the user to contact a qualified
+healthcare professional.
 For emergencies or immediate danger, advise contacting local emergency
 services or a trusted person.
 
 Do not ask for passwords, exact addresses, or unnecessary identifying
-or sensitive health details. Do not claim that your answers are medical
-diagnoses or guaranteed facts.
+or sensitive health details.
+Do not claim that your answers are medical diagnoses or guaranteed facts.
 `;
-
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
 
 type ChatMessage = {
   role: "user" | "model";
@@ -34,34 +38,58 @@ type ChatMessage = {
 
 export async function POST(request: Request) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
+    // 1. Check whether the API key is configured
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+      console.error("HerLoop chat: GEMINI_API_KEY is missing.");
+
       return NextResponse.json(
         { error: "The AI service is not configured yet." },
         { status: 503 }
       );
     }
 
-    const body = await request.json();
-    const messages = body.messages as ChatMessage[];
+    // 2. Create the Gemini client only after checking the API key
+    const ai = new GoogleGenAI({ apiKey });
 
+    // 3. Read the incoming request
+    let body: { messages?: unknown };
+
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request. Please try again." },
+        { status: 400 }
+      );
+    }
+
+    const messages = body.messages;
+
+    // 4. Validate the messages array
     if (
       !Array.isArray(messages) ||
       messages.length === 0 ||
       messages.length > 10
     ) {
       return NextResponse.json(
-        { error: "Please send up to 10 chat messages." },
+        { error: "Please send between 1 and 10 chat messages." },
         { status: 400 }
       );
     }
 
     const validMessages = messages.filter(
-      (message) =>
-        message &&
-        (message.role === "user" || message.role === "model") &&
-        typeof message.text === "string" &&
-        message.text.trim().length > 0 &&
-        message.text.length <= 2000
+      (message): message is ChatMessage =>
+        message !== null &&
+        typeof message === "object" &&
+        "role" in message &&
+        "text" in message &&
+        ((message as ChatMessage).role === "user" ||
+          (message as ChatMessage).role === "model") &&
+        typeof (message as ChatMessage).text === "string" &&
+        (message as ChatMessage).text.trim().length > 0 &&
+        (message as ChatMessage).text.length <= 2000
     );
 
     if (
@@ -74,6 +102,7 @@ export async function POST(request: Request) {
       );
     }
 
+    // 5. Send the conversation to Gemini
     const response = await ai.models.generateContent({
       model: "gemini-3.8-flash",
       contents: validMessages.map((message) => ({
@@ -87,18 +116,27 @@ export async function POST(request: Request) {
       },
     });
 
+    // 6. Check Gemini's response
     const reply = response.text?.trim();
 
     if (!reply) {
+      console.error("HerLoop chat: Gemini returned an empty response.");
+
       return NextResponse.json(
         { error: "I couldn't create a reply. Please try again." },
         { status: 502 }
       );
     }
 
+    // 7. Return the reply to the frontend
     return NextResponse.json({ reply });
-  } catch (error) {
-    console.error("HerLoop chat error:", error);
+  } catch (error: unknown) {
+    // Log useful error details in your local terminal
+    if (error instanceof Error) {
+      console.error("HerLoop chat error:", error.name, error.message);
+    } else {
+      console.error("HerLoop chat error:", error);
+    }
 
     return NextResponse.json(
       { error: "The AI guide is temporarily unavailable. Please try again." },
