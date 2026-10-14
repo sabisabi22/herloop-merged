@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -25,6 +24,13 @@ import {
   Clock,
   LoaderCircle,
   CheckCircle2,
+  ChevronDown,
+  Lightbulb,
+  Phone,
+  Droplets,
+  Brain,
+  Dumbbell,
+  Zap,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -42,6 +48,14 @@ type Category =
   | "Maternity"
   | "Wellbeing";
 
+/**
+ * mode controls which topics this panel shows:
+ *  - "health"    -> Health, Wellbeing, Maternity only
+ *  - "education" -> Education, Finance, Safety only
+ *  - "all"       -> everything (your original behaviour)
+ */
+export type LearnMode = "all" | "health" | "education";
+
 type Article = {
   id: string;
   title: string;
@@ -52,9 +66,16 @@ type Article = {
   phases: Phase[];
   Icon: LucideIcon;
   color: string;
+  keyPoints: string[];
 };
 
 const db = getFirestore(app);
+
+const MODE_CATEGORIES: Record<LearnMode, Category[]> = {
+  all: ["Health", "Education", "Safety", "Finance", "Maternity", "Wellbeing"],
+  health: ["Health", "Wellbeing", "Maternity"],
+  education: ["Education", "Finance", "Safety"],
+};
 
 const ARTICLES: Article[] = [
   {
@@ -68,6 +89,12 @@ const ARTICLES: Article[] = [
     phases: ["Teen", "Adult"],
     Icon: HeartPulse,
     color: COLORS.rose,
+    keyPoints: [
+      "A cycle is counted from the first day of one period to the first day of the next.",
+      "Cycles of about 21 to 35 days are common in adults, and teens often have longer ones.",
+      "Bleeding usually lasts 2 to 7 days.",
+      "Tracking a few months helps you learn what is normal for you.",
+    ],
   },
   {
     id: "starting-your-periods",
@@ -80,6 +107,12 @@ const ARTICLES: Article[] = [
     phases: ["Childhood", "Teen"],
     Icon: Sparkles,
     color: COLORS.gold,
+    keyPoints: [
+      "Most girls get their first period somewhere between about 9 and 15.",
+      "The first few periods can be irregular, and that is normal.",
+      "Keep a pad in your school bag so you are always prepared.",
+      "Talk to a trusted adult if you have questions or worries.",
+    ],
   },
   {
     id: "talking-about-periods",
@@ -92,6 +125,11 @@ const ARTICLES: Article[] = [
     phases: ["Childhood", "Teen"],
     Icon: Users,
     color: COLORS.rose,
+    keyPoints: [
+      "Pick a calm, private moment to talk.",
+      "No question is silly. Asking early helps you feel prepared.",
+      "A mother, sister, teacher, school nurse or doctor can all help.",
+    ],
   },
   {
     id: "menstrual-health-guidance",
@@ -104,42 +142,89 @@ const ARTICLES: Article[] = [
     phases: ["Teen", "Adult"],
     Icon: HeartPulse,
     color: COLORS.rose,
+    keyPoints: [
+      "Periods have stopped for several months and you are not pregnant.",
+      "Bleeding is very heavy, such as soaking a pad every 1 to 2 hours.",
+      "Pain regularly stops you from doing daily activities.",
+      "Bleeding between periods, or cycles that are very irregular.",
+      "These signs do not always mean something serious, but a doctor can help.",
+    ],
   },
   {
-    id: "education-support",
-    title: "Scholarships & education loans",
+    id: "menstrual-hygiene",
+    title: "Menstrual hygiene basics",
     description:
-      "Explore education resources and opportunities to support your studies.",
-    category: "Education",
-    url: "https://scholarships.gov.in/",
-    readMins: 4,
-    phases: ["Teen", "Adult"],
-    Icon: GraduationCap,
-    color: COLORS.moss,
-  },
-  {
-    id: "financial-literacy",
-    title: "Building financial independence",
-    description:
-      "Learn the basics of saving, budgeting, and managing money.",
-    category: "Finance",
-    url: "https://www.rbi.org.in/financialeducation/",
-    readMins: 4,
-    phases: ["Teen", "Adult"],
-    Icon: Wallet,
-    color: COLORS.moss,
-  },
-  {
-    id: "womens-support",
-    title: "Staying safe: know the warning signs",
-    description:
-      "Find official information about women's support and government initiatives in India.",
-    category: "Safety",
-    url: "https://www.childlineindia.org.in/",
-    readMins: 5,
-    phases: ["Teen", "Adult", "Maternity"],
-    Icon: Shield,
+      "Simple habits to stay clean, comfortable and confident during your period.",
+    category: "Health",
+    url: "https://www.nhs.uk/conditions/periods/",
+    readMins: 3,
+    phases: ["Childhood", "Teen", "Adult"],
+    Icon: Droplets,
     color: COLORS.rose,
+    keyPoints: [
+      "Change your pad or cloth every 4 to 6 hours, or sooner if it is full.",
+      "Wash your hands before and after changing.",
+      "Wrap used pads and put them in a bin. Do not flush them.",
+      "Wash the outer area with plain water. Avoid scented products.",
+      "Wash reusable cloth with soap and dry it fully, ideally in sunlight.",
+    ],
+  },
+  {
+    id: "period-pain-relief",
+    title: "Easing period pain",
+    description:
+      "Practical ways to manage cramps, and when pain needs a doctor's attention.",
+    category: "Health",
+    url: "https://www.nhs.uk/conditions/period-pain/",
+    readMins: 3,
+    phases: ["Teen", "Adult"],
+    Icon: Zap,
+    color: COLORS.gold,
+    keyPoints: [
+      "A warm water bottle or heat pad on the lower belly can help.",
+      "Gentle exercise such as walking or stretching can ease cramps.",
+      "Rest and drink plenty of water.",
+      "Ask a doctor or pharmacist which pain relief is suitable for you.",
+      "See a doctor if pain is severe or gets worse over time.",
+    ],
+  },
+  {
+    id: "pcos-basics",
+    title: "PCOS: what it is",
+    description:
+      "Understand polycystic ovary syndrome, common signs and how it is managed.",
+    category: "Health",
+    url: "https://www.who.int/news-room/fact-sheets/detail/polycystic-ovary-syndrome",
+    readMins: 5,
+    phases: ["Teen", "Adult"],
+    Icon: HeartPulse,
+    color: COLORS.rose,
+    keyPoints: [
+      "PCOS is a common hormonal condition.",
+      "Signs can include irregular periods, acne and extra hair growth.",
+      "Only a doctor can diagnose it, so do not self-diagnose.",
+      "Healthy food, regular activity and medical guidance can help manage it.",
+    ],
+  },
+  {
+    id: "anaemia-iron",
+    title: "Anaemia and iron",
+    description:
+      "Why iron matters, especially with heavy periods, and how to get enough.",
+    category: "Health",
+    url: "https://www.who.int/news-room/fact-sheets/detail/anaemia",
+    readMins: 4,
+    phases: ["Teen", "Adult", "Maternity"],
+    Icon: Droplets,
+    color: COLORS.gold,
+    keyPoints: [
+      "Anaemia means low haemoglobin, so the body carries less oxygen.",
+      "Common signs are tiredness, looking pale, dizziness and breathlessness.",
+      "Heavy periods are one common cause.",
+      "Lentils, beans, green leafy vegetables, eggs and meat provide iron.",
+      "Vitamin C foods such as lemon or amla help the body absorb iron.",
+      "Get tested before taking iron supplements.",
+    ],
   },
   {
     id: "nutrition-through-your-cycle",
@@ -152,6 +237,49 @@ const ARTICLES: Article[] = [
     phases: ["Teen", "Adult"],
     Icon: HeartPulse,
     color: COLORS.gold,
+    keyPoints: [
+      "Eat regular balanced meals with protein, vegetables and whole grains.",
+      "Include iron-rich foods, especially during and after your period.",
+      "Drink enough water through the day.",
+      "Do not skip meals. It can make tiredness and mood swings worse.",
+    ],
+  },
+  {
+    id: "mental-wellbeing",
+    title: "Looking after your mind",
+    description:
+      "Five simple steps for better mental wellbeing, and where to get support.",
+    category: "Wellbeing",
+    url: "https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/five-steps-to-mental-wellbeing/",
+    readMins: 4,
+    phases: ["Teen", "Adult", "Elder"],
+    Icon: Brain,
+    color: COLORS.moss,
+    keyPoints: [
+      "Stay connected with people you trust.",
+      "Be active, even a short daily walk helps.",
+      "Learn something new, and do small things for others.",
+      "Take a few quiet minutes to notice how you feel.",
+      "If you feel low for weeks, talk to someone. Tele-MANAS (14416) offers free support.",
+    ],
+  },
+  {
+    id: "physical-activity",
+    title: "Staying active",
+    description:
+      "How much movement your body needs, and easy ways to build it into your day.",
+    category: "Wellbeing",
+    url: "https://www.who.int/news-room/fact-sheets/detail/physical-activity",
+    readMins: 3,
+    phases: ["Childhood", "Teen", "Adult", "Elder"],
+    Icon: Dumbbell,
+    color: COLORS.moss,
+    keyPoints: [
+      "WHO suggests children and teens get about 60 minutes of activity a day.",
+      "Adults are advised about 150 to 300 minutes of moderate activity a week.",
+      "Walking, dancing, cycling and yoga all count.",
+      "Start small and build up slowly.",
+    ],
   },
   {
     id: "pregnancy-care",
@@ -164,6 +292,12 @@ const ARTICLES: Article[] = [
     phases: ["Maternity"],
     Icon: HeartPulse,
     color: COLORS.rose,
+    keyPoints: [
+      "Go for regular antenatal check-ups.",
+      "Take iron and folic acid only as advised by your doctor.",
+      "Eat balanced meals and stay hydrated.",
+      "Contact a doctor quickly if you notice heavy bleeding, severe headache or reduced baby movement.",
+    ],
   },
   {
     id: "healthy-aging",
@@ -176,22 +310,112 @@ const ARTICLES: Article[] = [
     phases: ["Adult", "Elder"],
     Icon: Users,
     color: COLORS.gold,
+    keyPoints: [
+      "Stay physically active and eat a balanced diet.",
+      "Have regular health check-ups.",
+      "Stay socially connected to protect your mood.",
+    ],
+  },
+  {
+    id: "education-support",
+    title: "Scholarships & education loans",
+    description:
+      "Explore education resources and opportunities to support your studies.",
+    category: "Education",
+    url: "https://scholarships.gov.in/",
+    readMins: 4,
+    phases: ["Teen", "Adult"],
+    Icon: GraduationCap,
+    color: COLORS.moss,
+    keyPoints: [
+      "The National Scholarship Portal lists many central and state schemes.",
+      "Check eligibility and the last date before you apply.",
+      "Keep your marksheets and certificates ready as scans.",
+    ],
+  },
+  {
+    id: "financial-literacy",
+    title: "Building financial independence",
+    description:
+      "Learn the basics of saving, budgeting, and managing money.",
+    category: "Finance",
+    url: "https://www.rbi.org.in/financialeducation/",
+    readMins: 4,
+    phases: ["Teen", "Adult"],
+    Icon: Wallet,
+    color: COLORS.moss,
+    keyPoints: [
+      "Save a small amount regularly. The habit matters more than the amount.",
+      "Track spending with a simple monthly budget.",
+      "Never share your OTP, PIN or password with anyone.",
+    ],
+  },
+  {
+    id: "womens-support",
+    title: "Staying safe: know the warning signs",
+    description:
+      "Find official information about women's support and government initiatives in India.",
+    category: "Safety",
+    url: "https://www.childlineindia.org.in/",
+    readMins: 5,
+    phases: ["Teen", "Adult", "Maternity"],
+    Icon: Shield,
+    color: COLORS.rose,
+    keyPoints: [
+      "Trust your instincts. If a situation feels unsafe, leave and seek help.",
+      "Women Helpline: 181. Emergency: 112. Childline (under 18): 1098.",
+      "Tell a trusted adult, teacher or friend what is happening.",
+    ],
   },
 ];
 
-const CATEGORIES = [
-  "All",
-  "Health",
-  "Education",
-  "Safety",
-  "Finance",
-  "Maternity",
-  "Wellbeing",
-  "Saved",
-  "Completed",
-] as const;
+/** Myths vs facts (shown in the Health library). */
+const MYTHS: { id: string; myth: string; fact: string }[] = [
+  {
+    id: "m1",
+    myth: "You should not exercise or wash your hair during periods.",
+    fact: "Light exercise can ease cramps, and bathing and hair wash are completely safe and hygienic.",
+  },
+  {
+    id: "m2",
+    myth: "Period blood is dirty or impure.",
+    fact: "It is blood and tissue from the lining of the uterus. It is a normal, healthy body process.",
+  },
+  {
+    id: "m3",
+    myth: "Painful periods are always normal and must just be tolerated.",
+    fact: "Mild cramps are common, but pain that stops your daily activities deserves medical advice.",
+  },
+  {
+    id: "m4",
+    myth: "Every cycle must be exactly 28 days.",
+    fact: "Cycles vary from person to person and from month to month. Tracking shows what is normal for you.",
+  },
+  {
+    id: "m5",
+    myth: "You cannot go to school or do normal activities during periods.",
+    fact: "Periods are not a reason to miss school, play or daily life. Good hygiene and rest when needed are enough.",
+  },
+];
 
-type FilterCategory = (typeof CATEGORIES)[number];
+const DAILY_TIPS = [
+  "Drink water regularly. Mild dehydration can make cramps and headaches feel worse.",
+  "A 10-minute walk can lift your mood and ease period discomfort.",
+  "Add a green leafy vegetable or lentils to one meal today for iron.",
+  "Aim for a steady sleep time. Good sleep supports hormones and mood.",
+  "Take 3 slow, deep breaths when you feel stressed. It really helps.",
+  "Tracking your cycle for a few months shows your personal pattern.",
+  "Talking to someone you trust about how you feel is a sign of strength.",
+];
+
+const HELPLINES = [
+  { name: "Emergency", number: "112" },
+  { name: "Women Helpline", number: "181" },
+  { name: "Tele-MANAS (mental health)", number: "14416" },
+  { name: "Childline (under 18)", number: "1098" },
+];
+
+type FilterCategory = "All" | Category | "Saved" | "Completed";
 
 function getLifecyclePhase(tier: AccountTier): Phase {
   if (tier === "under10") return "Childhood";
@@ -202,12 +426,22 @@ function getLifecyclePhase(tier: AccountTier): Phase {
 export default function LearnPanel({
   uid,
   tier,
+  mode = "health",
 }: {
   uid: string;
   tier?: AccountTier;
+  mode?: LearnMode;
 }) {
   const effectiveTier: AccountTier = tier ?? "adult";
   const lifecyclePhase = getLifecyclePhase(effectiveTier);
+
+  const modeCategories = MODE_CATEGORIES[mode];
+  const filterOptions: FilterCategory[] = [
+    "All",
+    ...modeCategories,
+    "Saved",
+    "Completed",
+  ];
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FilterCategory>("All");
@@ -225,6 +459,20 @@ export default function LearnPanel({
 
   const [bookmarkError, setBookmarkError] = useState("");
   const [progressError, setProgressError] = useState("");
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [revealedMyths, setRevealedMyths] = useState<string[]>([]);
+  const [tipIndex, setTipIndex] = useState(0);
+
+  // Pick a tip based on today's date (set after mount to avoid hydration mismatch).
+  useEffect(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 0);
+    const dayOfYear = Math.floor(
+      (now.getTime() - start.getTime()) / 86400000
+    );
+    setTipIndex(dayOfYear % DAILY_TIPS.length);
+  }, []);
 
   // Load saved articles from Firebase.
   useEffect(() => {
@@ -268,12 +516,7 @@ export default function LearnPanel({
     setLoadingProgress(true);
     setProgressError("");
 
-    const progressRef = collection(
-      db,
-      "users",
-      uid,
-      "completedTopics"
-    );
+    const progressRef = collection(db, "users", uid, "completedTopics");
 
     const unsubscribe = onSnapshot(
       progressRef,
@@ -299,13 +542,7 @@ export default function LearnPanel({
     setSavingId(article.id);
     setBookmarkError("");
 
-    const bookmarkRef = doc(
-      db,
-      "users",
-      uid,
-      "bookmarks",
-      article.id
-    );
+    const bookmarkRef = doc(db, "users", uid, "bookmarks", article.id);
 
     try {
       if (savedIds.includes(article.id)) {
@@ -335,13 +572,7 @@ export default function LearnPanel({
     setSavingProgressId(article.id);
     setProgressError("");
 
-    const progressRef = doc(
-      db,
-      "users",
-      uid,
-      "completedTopics",
-      article.id
-    );
+    const progressRef = doc(db, "users", uid, "completedTopics", article.id);
 
     try {
       if (completedIds.includes(article.id)) {
@@ -364,12 +595,21 @@ export default function LearnPanel({
     }
   }
 
+  function toggleMyth(id: string) {
+    setRevealedMyths((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  // Articles for this life stage AND this mode.
   const lifecycleArticles = useMemo(
     () =>
-      ARTICLES.filter((article) =>
-        article.phases.includes(lifecyclePhase)
+      ARTICLES.filter(
+        (article) =>
+          article.phases.includes(lifecyclePhase) &&
+          modeCategories.includes(article.category)
       ),
-    [lifecyclePhase]
+    [lifecyclePhase, modeCategories]
   );
 
   const filteredArticles = useMemo(() => {
@@ -394,13 +634,7 @@ export default function LearnPanel({
 
       return matchesSearch && matchesCategory;
     });
-  }, [
-    lifecycleArticles,
-    query,
-    category,
-    savedIds,
-    completedIds,
-  ]);
+  }, [lifecycleArticles, query, category, savedIds, completedIds]);
 
   const completedCount = lifecycleArticles.filter((article) =>
     completedIds.includes(article.id)
@@ -408,10 +642,14 @@ export default function LearnPanel({
 
   const progressPercent =
     lifecycleArticles.length > 0
-      ? Math.round(
-          (completedCount / lifecycleArticles.length) * 100
-        )
+      ? Math.round((completedCount / lifecycleArticles.length) * 100)
       : 0;
+
+  const isHealth = mode === "health";
+  const heading = isHealth ? "My Health" : mode === "education" ? "Learn & Grow" : "Learn & Grow";
+  const HeaderIcon = isHealth ? HeartPulse : BookOpen;
+
+  const showExtras = isHealth && category === "All" && !query.trim();
 
   return (
     <section className="pb-8">
@@ -424,7 +662,7 @@ export default function LearnPanel({
               background: `linear-gradient(135deg, ${COLORS.rose}22, ${COLORS.plum}18)`,
             }}
           >
-            <BookOpen size={24} style={{ color: COLORS.rose }} />
+            <HeaderIcon size={24} style={{ color: COLORS.rose }} />
           </div>
 
           <div>
@@ -432,7 +670,7 @@ export default function LearnPanel({
               className="font-display text-2xl font-bold"
               style={{ color: COLORS.plum }}
             >
-              Learn & Grow
+              {heading}
             </h2>
             <p
               className="mt-1 text-sm"
@@ -443,6 +681,40 @@ export default function LearnPanel({
           </div>
         </div>
       </div>
+
+      {/* Daily tip (health only) */}
+      {isHealth && (
+        <div className="mb-5 px-5">
+          <div
+            className="flex gap-3 rounded-2xl p-4"
+            style={{
+              background: `${COLORS.gold}18`,
+              border: `1px solid ${COLORS.gold}40`,
+            }}
+          >
+            <div
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+              style={{ background: COLORS.gold }}
+            >
+              <Lightbulb size={19} color="#fff" />
+            </div>
+            <div>
+              <p
+                className="text-xs font-semibold uppercase tracking-wide"
+                style={{ color: `${COLORS.plum}88` }}
+              >
+                Today&apos;s health tip
+              </p>
+              <p
+                className="mt-1 text-sm leading-6"
+                style={{ color: COLORS.plum }}
+              >
+                {DAILY_TIPS[tipIndex]}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Learning progress */}
       <div className="mb-5 px-5">
@@ -473,10 +745,7 @@ export default function LearnPanel({
 
             <div
               className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
-              style={{
-                background: "#FFFFFF",
-                color: COLORS.rose,
-              }}
+              style={{ background: "#FFFFFF", color: COLORS.rose }}
             >
               <GraduationCap size={25} />
             </div>
@@ -514,8 +783,8 @@ export default function LearnPanel({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search learning topics..."
-            aria-label="Search learning topics"
+            placeholder={isHealth ? "Search health topics..." : "Search learning topics..."}
+            aria-label={isHealth ? "Search health topics" : "Search learning topics"}
             className="min-w-0 flex-1 bg-transparent text-base outline-none"
             style={{ color: COLORS.plum }}
           />
@@ -536,7 +805,7 @@ export default function LearnPanel({
       {/* Categories */}
       <div className="mb-4 px-5">
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {CATEGORIES.map((item) => {
+          {filterOptions.map((item) => {
             const active = category === item;
 
             return (
@@ -567,10 +836,7 @@ export default function LearnPanel({
 
       {/* Count and errors */}
       <div className="mb-3 px-5">
-        <p
-          className="text-sm"
-          style={{ color: `${COLORS.plum}99` }}
-        >
+        <p className="text-sm" style={{ color: `${COLORS.plum}99` }}>
           {filteredArticles.length} topic
           {filteredArticles.length === 1 ? "" : "s"} shown
         </p>
@@ -605,6 +871,7 @@ export default function LearnPanel({
           const isCompleted = completedIds.includes(article.id);
           const isSaving = savingId === article.id;
           const isSavingProgress = savingProgressId === article.id;
+          const isExpanded = expandedId === article.id;
 
           return (
             <article
@@ -618,14 +885,9 @@ export default function LearnPanel({
               <div className="flex items-start gap-3">
                 <div
                   className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
-                  style={{
-                    background: `${article.color}20`,
-                  }}
+                  style={{ background: `${article.color}20` }}
                 >
-                  <article.Icon
-                    size={23}
-                    style={{ color: article.color }}
-                  />
+                  <article.Icon size={23} style={{ color: article.color }} />
                 </div>
 
                 <div className="min-w-0 flex-1">
@@ -651,10 +913,7 @@ export default function LearnPanel({
                       style={{ color: COLORS.rose }}
                     >
                       {isSaving ? (
-                        <LoaderCircle
-                          size={20}
-                          className="animate-spin"
-                        />
+                        <LoaderCircle size={20} className="animate-spin" />
                       ) : (
                         <Bookmark
                           size={20}
@@ -708,6 +967,47 @@ export default function LearnPanel({
                     )}
                   </div>
 
+                  {/* Key points (expandable) */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedId(isExpanded ? null : article.id)
+                    }
+                    aria-expanded={isExpanded}
+                    className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold"
+                    style={{ color: COLORS.plum }}
+                  >
+                    Key points
+                    <ChevronDown
+                      size={16}
+                      className="transition-transform"
+                      style={{
+                        transform: isExpanded ? "rotate(180deg)" : "none",
+                      }}
+                    />
+                  </button>
+
+                  {isExpanded && (
+                    <ul
+                      className="mt-2 space-y-2 rounded-xl p-3"
+                      style={{ background: `${COLORS.plum}08` }}
+                    >
+                      {article.keyPoints.map((point) => (
+                        <li
+                          key={point}
+                          className="flex gap-2 text-sm leading-6"
+                          style={{ color: `${COLORS.plum}CC` }}
+                        >
+                          <span
+                            className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full"
+                            style={{ background: article.color }}
+                          />
+                          {point}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
                   <div className="mt-4 flex flex-wrap gap-2">
                     <a
                       href={article.url}
@@ -736,10 +1036,7 @@ export default function LearnPanel({
                       }}
                     >
                       {isSavingProgress ? (
-                        <LoaderCircle
-                          size={17}
-                          className="animate-spin"
-                        />
+                        <LoaderCircle size={17} className="animate-spin" />
                       ) : (
                         <CheckCircle2 size={17} />
                       )}
@@ -772,10 +1069,7 @@ export default function LearnPanel({
               style={{ color: COLORS.rose }}
             />
 
-            <p
-              className="text-base font-bold"
-              style={{ color: COLORS.plum }}
-            >
+            <p className="text-base font-bold" style={{ color: COLORS.plum }}>
               {category === "Saved"
                 ? "No saved articles yet"
                 : category === "Completed"
@@ -795,6 +1089,99 @@ export default function LearnPanel({
             </p>
           </div>
         )}
+
+      {/* Myths vs Facts (health only) */}
+      {showExtras && (
+        <div className="mt-8 px-5">
+          <h3
+            className="font-display text-lg font-bold"
+            style={{ color: COLORS.plum }}
+          >
+            Myths vs facts
+          </h3>
+          <p
+            className="mb-3 mt-1 text-sm"
+            style={{ color: `${COLORS.plum}99` }}
+          >
+            Tap a myth to see the fact.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            {MYTHS.map((item) => {
+              const open = revealedMyths.includes(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => toggleMyth(item.id)}
+                  aria-expanded={open}
+                  className="rounded-2xl p-4 text-left transition"
+                  style={{
+                    background: open ? "#DCFCE7" : "#FFFFFF",
+                    border: `1px solid ${open ? "#86EFAC" : COLORS.mist}`,
+                  }}
+                >
+                  <p
+                    className="text-xs font-bold uppercase tracking-wide"
+                    style={{ color: open ? "#166534" : COLORS.rose }}
+                  >
+                    {open ? "Fact" : "Myth"}
+                  </p>
+                  <p
+                    className="mt-1 text-sm leading-6"
+                    style={{ color: COLORS.plum }}
+                  >
+                    {open ? item.fact : item.myth}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Helplines (health only) */}
+      {isHealth && (
+        <div className="mt-8 px-5">
+          <h3
+            className="font-display text-lg font-bold"
+            style={{ color: COLORS.plum }}
+          >
+            Need to talk to someone?
+          </h3>
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {HELPLINES.map((line) => (
+              <a
+                key={line.number}
+                href={`tel:${line.number}`}
+                className="flex items-center gap-3 rounded-2xl bg-white p-4"
+                style={{ border: `1px solid ${COLORS.mist}` }}
+              >
+                <div
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+                  style={{ background: `${COLORS.rose}18` }}
+                >
+                  <Phone size={18} style={{ color: COLORS.rose }} />
+                </div>
+                <div>
+                  <p
+                    className="text-sm font-semibold"
+                    style={{ color: COLORS.plum }}
+                  >
+                    {line.name}
+                  </p>
+                  <p
+                    className="text-base font-bold"
+                    style={{ color: COLORS.rose }}
+                  >
+                    {line.number}
+                  </p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <p
         className="mt-6 px-8 text-center text-sm leading-6"

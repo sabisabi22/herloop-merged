@@ -16,6 +16,7 @@ import {
   toDateStr,
 } from "@/lib/cycle";
 import MotivationCard from "./MotivationCard";
+import DailyCheckIn from "./Dailycheckin";
 
 const WEEK_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -302,7 +303,7 @@ export default function TrackerPanel({
             const isSelected = selected === dateStr;
 
             let background = "transparent";
-            let color : string = COLORS.plum;
+            let color: string = COLORS.plum;
 
             if (kind === "period") {
               background = COLORS.rose;
@@ -454,6 +455,9 @@ export default function TrackerPanel({
           Log today's flow
         </button>
       </div>
+
+      {/* Daily check-in: mood, symptoms, note */}
+      <DailyCheckIn uid={uid} date={selected ?? todayStr} />
 
       {/* Log period modal */}
       <AnimatePresence>
