@@ -24,7 +24,9 @@ import {
   Sparkles,
   Clock,
   LoaderCircle,
+  CheckCircle2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import type { AccountTier } from "@/lib/auth";
 import { app } from "@/lib/firebaseConfig";
@@ -48,7 +50,7 @@ type Article = {
   url: string;
   readMins: number;
   phases: Phase[];
-  Icon: typeof BookOpen;
+  Icon: LucideIcon;
   color: string;
 };
 
@@ -186,6 +188,7 @@ const CATEGORIES = [
   "Maternity",
   "Wellbeing",
   "Saved",
+  "Completed",
 ] as const;
 
 type FilterCategory = (typeof CATEGORIES)[number];
@@ -208,12 +211,22 @@ export default function LearnPanel({
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<FilterCategory>("All");
-  const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
-  const [savingId, setSavingId] = useState<string | null>(null);
-  const [bookmarkError, setBookmarkError] = useState("");
 
-  // Load this user's saved articles from Firestore.
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [completedIds, setCompletedIds] = useState<string[]>([]);
+
+  const [loadingBookmarks, setLoadingBookmarks] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(true);
+
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [savingProgressId, setSavingProgressId] = useState<string | null>(
+    null
+  );
+
+  const [bookmarkError, setBookmarkError] = useState("");
+  const [progressError, setProgressError] = useState("");
+
+  // Load saved articles from Firebase.
   useEffect(() => {
     if (!uid) {
       setSavedIds([]);
@@ -235,9 +248,45 @@ export default function LearnPanel({
       (error) => {
         console.error("Could not load Learn bookmarks:", error);
         setBookmarkError(
-          "Bookmarks could not be loaded. Check your connection or account permissions."
+          "Saved articles could not be loaded. Check your connection or Firebase permissions."
         );
         setLoadingBookmarks(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [uid]);
+
+  // Load completed topics from Firebase.
+  useEffect(() => {
+    if (!uid) {
+      setCompletedIds([]);
+      setLoadingProgress(false);
+      return;
+    }
+
+    setLoadingProgress(true);
+    setProgressError("");
+
+    const progressRef = collection(
+      db,
+      "users",
+      uid,
+      "completedTopics"
+    );
+
+    const unsubscribe = onSnapshot(
+      progressRef,
+      (snapshot) => {
+        setCompletedIds(snapshot.docs.map((item) => item.id));
+        setLoadingProgress(false);
+      },
+      (error) => {
+        console.error("Could not load learning progress:", error);
+        setProgressError(
+          "Learning progress could not be loaded. Check your Firebase permissions."
+        );
+        setLoadingProgress(false);
       }
     );
 
@@ -273,10 +322,45 @@ export default function LearnPanel({
     } catch (error) {
       console.error("Could not update bookmark:", error);
       setBookmarkError(
-        "Could not update your bookmark. Check your Firestore rules and try again."
+        "Could not update your bookmark. Check your Firebase rules and try again."
       );
     } finally {
       setSavingId(null);
+    }
+  }
+
+  async function toggleCompleted(article: Article) {
+    if (!uid || savingProgressId) return;
+
+    setSavingProgressId(article.id);
+    setProgressError("");
+
+    const progressRef = doc(
+      db,
+      "users",
+      uid,
+      "completedTopics",
+      article.id
+    );
+
+    try {
+      if (completedIds.includes(article.id)) {
+        await deleteDoc(progressRef);
+      } else {
+        await setDoc(progressRef, {
+          articleId: article.id,
+          title: article.title,
+          category: article.category,
+          completedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      console.error("Could not update learning progress:", error);
+      setProgressError(
+        "Could not save your progress. Check your Firebase rules and try again."
+      );
+    } finally {
+      setSavingProgressId(null);
     }
   }
 
@@ -298,19 +382,41 @@ export default function LearnPanel({
         article.description.toLowerCase().includes(search) ||
         article.category.toLowerCase().includes(search);
 
-      const matchesCategory =
-        category === "All" ||
-        (category === "Saved" && savedIds.includes(article.id)) ||
-        article.category === category;
+      let matchesCategory = true;
+
+      if (category === "Saved") {
+        matchesCategory = savedIds.includes(article.id);
+      } else if (category === "Completed") {
+        matchesCategory = completedIds.includes(article.id);
+      } else if (category !== "All") {
+        matchesCategory = article.category === category;
+      }
 
       return matchesSearch && matchesCategory;
     });
-  }, [lifecycleArticles, query, category, savedIds]);
+  }, [
+    lifecycleArticles,
+    query,
+    category,
+    savedIds,
+    completedIds,
+  ]);
+
+  const completedCount = lifecycleArticles.filter((article) =>
+    completedIds.includes(article.id)
+  ).length;
+
+  const progressPercent =
+    lifecycleArticles.length > 0
+      ? Math.round(
+          (completedCount / lifecycleArticles.length) * 100
+        )
+      : 0;
 
   return (
     <section className="pb-8">
       {/* Header */}
-      <div className="px-5 pt-6 pb-5">
+      <div className="px-5 pb-5 pt-6">
         <div className="flex items-center gap-3">
           <div
             className="flex h-12 w-12 items-center justify-center rounded-2xl shadow-sm"
@@ -318,81 +424,99 @@ export default function LearnPanel({
               background: `linear-gradient(135deg, ${COLORS.rose}22, ${COLORS.plum}18)`,
             }}
           >
-            <BookOpen size={22} style={{ color: COLORS.rose }} />
+            <BookOpen size={24} style={{ color: COLORS.rose }} />
           </div>
 
           <div>
             <h2
-              className="font-display text-lg"
+              className="font-display text-2xl font-bold"
               style={{ color: COLORS.plum }}
             >
-              Learning resources
+              Learn & Grow
             </h2>
             <p
-              className="mt-0.5 text-xs font-body"
-              style={{ color: `${COLORS.plum}77` }}
+              className="mt-1 text-sm"
+              style={{ color: `${COLORS.plum}99` }}
             >
-              Guidance for your {lifecyclePhase.toLowerCase()} stage
+              Resources for your {lifecyclePhase.toLowerCase()} stage
             </p>
           </div>
         </div>
       </div>
 
-      {/* Lifecycle card */}
-      <div className="mb-4 px-5">
+      {/* Learning progress */}
+      <div className="mb-5 px-5">
         <div
-          className="rounded-2xl px-4 py-4 shadow-sm"
+          className="rounded-2xl p-5 shadow-sm"
           style={{
             background: `linear-gradient(135deg, ${COLORS.rose}12, ${COLORS.plum}0A)`,
             border: `1px solid ${COLORS.rose}30`,
           }}
         >
-          <p
-            className="text-[10px] font-semibold uppercase tracking-wider"
-            style={{ color: `${COLORS.plum}77` }}
-          >
-            Your learning stage
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p
+                className="text-sm font-semibold"
+                style={{ color: COLORS.plum }}
+              >
+                Your learning progress
+              </p>
+              <p
+                className="mt-1 text-sm"
+                style={{ color: `${COLORS.plum}99` }}
+              >
+                {loadingProgress
+                  ? "Loading your progress..."
+                  : `${completedCount} of ${lifecycleArticles.length} topics completed`}
+              </p>
+            </div>
 
-          <div className="mt-2 flex items-center justify-between">
-            <p
-              className="text-sm font-semibold"
-              style={{ color: COLORS.plum }}
-            >
-              {lifecyclePhase}
-            </p>
-
-            <span
-              className="rounded-full px-3 py-1 text-[10px] font-semibold"
+            <div
+              className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
               style={{
-                background: `linear-gradient(135deg, ${COLORS.rose}20, ${COLORS.plum}18)`,
+                background: "#FFFFFF",
                 color: COLORS.rose,
               }}
             >
-              <Sparkles size={11} className="mr-1 inline" />
-              Personalised
-            </span>
+              <GraduationCap size={25} />
+            </div>
           </div>
+
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${progressPercent}%`,
+                background: `linear-gradient(90deg, ${COLORS.rose}, ${COLORS.plum})`,
+              }}
+            />
+          </div>
+
+          <p
+            className="mt-2 text-sm font-semibold"
+            style={{ color: COLORS.rose }}
+          >
+            {loadingProgress
+              ? "Calculating progress..."
+              : `${progressPercent}% completed`}
+          </p>
         </div>
       </div>
 
       {/* Search */}
       <div className="mb-4 px-5">
         <div
-          className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-sm transition focus-within:ring-2"
-          style={{
-            border: `1px solid ${COLORS.mist}`,
-            boxShadow: `0 3px 12px ${COLORS.plum}08`,
-          }}
+          className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3.5 shadow-sm"
+          style={{ border: `1px solid ${COLORS.mist}` }}
         >
-          <Search size={17} style={{ color: COLORS.rose }} />
+          <Search size={20} style={{ color: COLORS.rose }} />
 
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search topics..."
-            aria-label="Search Learn articles"
-            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+            placeholder="Search learning topics..."
+            aria-label="Search learning topics"
+            className="min-w-0 flex-1 bg-transparent text-base outline-none"
             style={{ color: COLORS.plum }}
           />
 
@@ -400,8 +524,7 @@ export default function LearnPanel({
             <button
               type="button"
               onClick={() => setQuery("")}
-              aria-label="Clear search"
-              className="text-xs font-semibold"
+              className="text-sm font-semibold"
               style={{ color: COLORS.rose }}
             >
               Clear
@@ -410,7 +533,7 @@ export default function LearnPanel({
         </div>
       </div>
 
-      {/* Category filters */}
+      {/* Categories */}
       <div className="mb-4 px-5">
         <div className="flex gap-2 overflow-x-auto pb-2">
           {CATEGORIES.map((item) => {
@@ -422,92 +545,85 @@ export default function LearnPanel({
                 type="button"
                 onClick={() => setCategory(item)}
                 aria-pressed={active}
-                className="flex-shrink-0 rounded-full px-4 py-2.5 text-xs font-semibold transition duration-200 hover:-translate-y-0.5"
+                className="flex-shrink-0 rounded-full px-4 py-2.5 text-sm font-semibold transition"
                 style={{
                   background: active
                     ? `linear-gradient(135deg, ${COLORS.rose}, ${COLORS.plum})`
-                    : "#ffffff",
-                  color: active ? "#ffffff" : COLORS.plum,
-                  border: `1px solid ${
-                    active ? COLORS.rose : COLORS.mist
-                  }`,
-                  boxShadow: active
-                    ? `0 3px 10px ${COLORS.rose}30`
-                    : "none",
+                    : "#FFFFFF",
+                  color: active ? "#FFFFFF" : COLORS.plum,
+                  border: `1px solid ${active ? COLORS.rose : COLORS.mist}`,
                 }}
               >
-                {item === "Saved" ? "★ Saved" : item}
+                {item === "Saved"
+                  ? "★ Saved"
+                  : item === "Completed"
+                    ? "✓ Completed"
+                    : item}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Article count and bookmark status */}
+      {/* Count and errors */}
       <div className="mb-3 px-5">
-        <div className="flex items-center justify-between gap-2">
-          <p
-            className="text-xs font-medium"
-            style={{ color: `${COLORS.plum}88` }}
-          >
-            {filteredArticles.length} topic
-            {filteredArticles.length === 1 ? "" : "s"} for your stage
-          </p>
-
-          {category === "Saved" && (
-            <span
-              className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
-              style={{
-                background: `${COLORS.rose}15`,
-                color: COLORS.rose,
-              }}
-            >
-              Bookmarked
-            </span>
-          )}
-        </div>
+        <p
+          className="text-sm"
+          style={{ color: `${COLORS.plum}99` }}
+        >
+          {filteredArticles.length} topic
+          {filteredArticles.length === 1 ? "" : "s"} shown
+        </p>
 
         {loadingBookmarks && (
           <p
-            className="mt-2 flex items-center gap-2 text-xs"
-            style={{ color: `${COLORS.plum}77` }}
+            className="mt-2 flex items-center gap-2 text-sm"
+            style={{ color: `${COLORS.plum}99` }}
           >
-            <LoaderCircle size={13} className="animate-spin" />
-            Loading your saved articles...
+            <LoaderCircle size={16} className="animate-spin" />
+            Loading saved articles...
           </p>
         )}
 
         {bookmarkError && (
-          <p className="mt-2 text-xs text-red-600" role="alert">
+          <p className="mt-2 text-sm text-red-600" role="alert">
             {bookmarkError}
+          </p>
+        )}
+
+        {progressError && (
+          <p className="mt-2 text-sm text-red-600" role="alert">
+            {progressError}
           </p>
         )}
       </div>
 
       {/* Article cards */}
-      <div className="flex flex-col gap-3 px-5">
+      <div className="flex flex-col gap-4 px-5">
         {filteredArticles.map((article) => {
           const isSaved = savedIds.includes(article.id);
+          const isCompleted = completedIds.includes(article.id);
           const isSaving = savingId === article.id;
+          const isSavingProgress = savingProgressId === article.id;
 
           return (
             <article
               key={article.id}
-              className="rounded-2xl bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              className="rounded-2xl bg-white p-5 shadow-sm"
               style={{
                 border: `1px solid ${COLORS.mist}`,
                 boxShadow: `0 4px 16px ${COLORS.plum}08`,
               }}
             >
-              <div className="flex gap-3">
+              <div className="flex items-start gap-3">
                 <div
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl"
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
                   style={{
-                    background: `linear-gradient(135deg, ${article.color}24, ${COLORS.plum}0A)`,
+                    background: `${article.color}20`,
                   }}
                 >
                   <article.Icon
-                    size={20}
+                    size={23}
                     style={{ color: article.color }}
                   />
                 </div>
@@ -515,7 +631,7 @@ export default function LearnPanel({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <h3
-                      className="text-sm font-semibold leading-5"
+                      className="text-base font-bold leading-6"
                       style={{ color: COLORS.plum }}
                     >
                       {article.title}
@@ -531,17 +647,17 @@ export default function LearnPanel({
                           : `Save ${article.title}`
                       }
                       title={isSaved ? "Remove bookmark" : "Save article"}
-                      className="flex-shrink-0 rounded-xl p-2 transition hover:bg-rose-50 disabled:opacity-50"
+                      className="flex-shrink-0 rounded-xl p-2 disabled:opacity-50"
                       style={{ color: COLORS.rose }}
                     >
                       {isSaving ? (
                         <LoaderCircle
-                          size={18}
+                          size={20}
                           className="animate-spin"
                         />
                       ) : (
                         <Bookmark
-                          size={18}
+                          size={20}
                           fill={isSaved ? COLORS.rose : "none"}
                         />
                       )}
@@ -549,57 +665,92 @@ export default function LearnPanel({
                   </div>
 
                   <p
-                    className="mt-1 text-xs leading-5"
-                    style={{ color: `${COLORS.plum}99` }}
+                    className="mt-2 text-sm leading-6"
+                    style={{ color: `${COLORS.plum}B0` }}
                   >
                     {article.description}
                   </p>
 
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span
-                      className="rounded-full px-2.5 py-1 text-[10px] font-semibold"
+                      className="rounded-full px-3 py-1 text-xs font-semibold"
                       style={{
                         color: article.color,
-                        background: `${article.color}15`,
+                        background: `${article.color}18`,
                       }}
                     >
                       {article.category}
                     </span>
 
                     <span
-                      className="flex items-center gap-1 text-[10px]"
-                      style={{ color: `${COLORS.plum}80` }}
+                      className="flex items-center gap-1 text-sm"
+                      style={{ color: `${COLORS.plum}99` }}
                     >
-                      <Clock size={11} />
+                      <Clock size={15} />
                       {article.readMins} min read
                     </span>
 
                     {isSaved && (
                       <span
-                        className="flex items-center gap-1 text-[10px] font-semibold"
+                        className="flex items-center gap-1 text-xs font-semibold"
                         style={{ color: COLORS.rose }}
                       >
-                        <Bookmark size={10} fill={COLORS.rose} />
+                        <Bookmark size={13} fill={COLORS.rose} />
                         Saved
+                      </span>
+                    )}
+
+                    {isCompleted && (
+                      <span className="flex items-center gap-1 text-xs font-semibold text-green-700">
+                        <CheckCircle2 size={14} />
+                        Completed
                       </span>
                     )}
                   </div>
 
-                  {/* Read full article link */}
-                  <a
-                    href={article.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Read ${article.title} on its original website (opens in a new tab)`}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition hover:opacity-80"
-                    style={{
-                      color: COLORS.rose,
-                      background: `linear-gradient(135deg, ${COLORS.rose}12, ${COLORS.plum}0A)`,
-                    }}
-                  >
-                    Read full article
-                    <ExternalLink size={13} />
-                  </a>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <a
+                      href={article.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Read ${article.title} on its original website (opens in a new tab)`}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+                      style={{
+                        color: COLORS.rose,
+                        background: `${COLORS.rose}12`,
+                      }}
+                    >
+                      Read resource
+                      <ExternalLink size={16} />
+                    </a>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleCompleted(article)}
+                      disabled={Boolean(savingProgressId) || !uid}
+                      aria-pressed={isCompleted}
+                      className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50"
+                      style={{
+                        color: isCompleted ? "#166534" : COLORS.plum,
+                        background: isCompleted ? "#DCFCE7" : "#F4F0F5",
+                      }}
+                    >
+                      {isSavingProgress ? (
+                        <LoaderCircle
+                          size={17}
+                          className="animate-spin"
+                        />
+                      ) : (
+                        <CheckCircle2 size={17} />
+                      )}
+
+                      {isSavingProgress
+                        ? "Saving..."
+                        : isCompleted
+                          ? "Mark as not completed"
+                          : "Mark as completed"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </article>
@@ -608,46 +759,50 @@ export default function LearnPanel({
       </div>
 
       {/* Empty state */}
-      {!loadingBookmarks && filteredArticles.length === 0 && (
-        <div
-          className="mx-5 mt-2 rounded-2xl bg-white p-6 text-center shadow-sm"
-          style={{ border: `1px solid ${COLORS.mist}` }}
-        >
+      {!loadingBookmarks &&
+        !loadingProgress &&
+        filteredArticles.length === 0 && (
           <div
-            className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
-            style={{
-              background: `linear-gradient(135deg, ${COLORS.rose}20, ${COLORS.plum}15)`,
-            }}
+            className="mx-5 mt-3 rounded-2xl bg-white p-6 text-center shadow-sm"
+            style={{ border: `1px solid ${COLORS.mist}` }}
           >
-            <BookOpen size={24} style={{ color: COLORS.rose }} />
+            <BookOpen
+              size={30}
+              className="mx-auto mb-3"
+              style={{ color: COLORS.rose }}
+            />
+
+            <p
+              className="text-base font-bold"
+              style={{ color: COLORS.plum }}
+            >
+              {category === "Saved"
+                ? "No saved articles yet"
+                : category === "Completed"
+                  ? "No completed topics yet"
+                  : "No topics found"}
+            </p>
+
+            <p
+              className="mt-2 text-sm leading-6"
+              style={{ color: `${COLORS.plum}99` }}
+            >
+              {category === "Saved"
+                ? "Tap the bookmark icon on a resource to save it here."
+                : category === "Completed"
+                  ? "After reading a resource, mark it as completed to track your progress."
+                  : "Try another search or choose a different category."}
+            </p>
           </div>
-
-          <p
-            className="text-sm font-semibold"
-            style={{ color: COLORS.plum }}
-          >
-            {category === "Saved"
-              ? "No saved articles yet"
-              : "No articles found"}
-          </p>
-
-          <p
-            className="mt-1 text-xs leading-5"
-            style={{ color: `${COLORS.plum}88` }}
-          >
-            {category === "Saved"
-              ? "Tap the bookmark icon on an article to save it here."
-              : "Try another search or choose a different category."}
-          </p>
-        </div>
-      )}
+        )}
 
       <p
-        className="mt-6 px-8 text-center text-[11px] leading-5"
-        style={{ color: `${COLORS.plum}77` }}
+        className="mt-6 px-8 text-center text-sm leading-6"
+        style={{ color: `${COLORS.plum}88` }}
       >
-        Articles open on their original websites. Information is
-        educational and does not replace professional advice.
+        Resources open on their original websites. Learning progress reflects
+        the topics you mark as completed. Health information is educational
+        and does not replace professional advice.
       </p>
     </section>
   );
