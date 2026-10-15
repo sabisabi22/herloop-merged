@@ -1,7 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  doc,
+  getDoc,
+  getFirestore,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { app } from "@/lib/firebaseConfig";
 import { COLORS } from "@/lib/theme";
+
+const db = getFirestore(app);
 
 const MOODS = [
   { id: "happy", emoji: "😊", label: "Happy" },
@@ -24,133 +35,340 @@ const SYMPTOMS = [
   "Tender breasts",
 ];
 
-type CheckIn = { mood: string | null; symptoms: string[]; note: string };
+type CheckIn = {
+  mood: string | null;
+  symptoms: string[];
+  note: string;
+};
 
-const empty: CheckIn = { mood: null, symptoms: [], note: "" };
+const empty: CheckIn = {
+  mood: null,
+  symptoms: [],
+  note: "",
+};
 
 type Props = {
   uid: string;
-  date: string; // "YYYY-MM-DD"
+  date: string;
 };
 
 export default function DailyCheckIn({ uid, date }: Props) {
-  const key = `herloop-checkin-${uid}-${date}`;
   const [data, setData] = useState<CheckIn>(empty);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  // load whenever the selected date changes
+  // Load the selected user's check-in for the selected date.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      setData(raw ? JSON.parse(raw) : empty);
-    } catch {
-      setData(empty);
-    }
-    setSaved(false);
-  }, [key]);
+    let cancelled = false;
 
-  const toggleSymptom = (s: string) =>
-    setData((d) => ({
-      ...d,
-      symptoms: d.symptoms.includes(s)
-        ? d.symptoms.filter((x) => x !== s)
-        : [...d.symptoms, s],
+    async function loadCheckIn() {
+      setLoading(true);
+      setSaved(false);
+      setError("");
+      setData(empty);
+
+      try {
+        const checkInRef = doc(
+          db,
+          "users",
+          uid,
+          "dailyCheckIns",
+          date
+        );
+
+        const snapshot = await getDoc(checkInRef);
+
+        if (cancelled) return;
+
+        if (snapshot.exists()) {
+          const value = snapshot.data();
+
+          setData({
+            mood:
+              typeof value.mood === "string"
+                ? value.mood
+                : null,
+
+            symptoms: Array.isArray(value.symptoms)
+              ? value.symptoms.filter(
+                  (item): item is string =>
+                    typeof item === "string"
+                )
+              : [],
+
+            note:
+              typeof value.note === "string"
+                ? value.note
+                : "",
+          });
+        } else {
+          setData(empty);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Could not load your check-in."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadCheckIn();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, date]);
+
+  function toggleMood(moodId: string) {
+    setData((current) => ({
+      ...current,
+      mood: current.mood === moodId ? null : moodId,
     }));
 
-  // Swap localStorage for your Firestore/API call later.
-  const save = () => {
+    setSaved(false);
+    setError("");
+  }
+
+  function toggleSymptom(symptom: string) {
+    setData((current) => ({
+      ...current,
+      symptoms: current.symptoms.includes(symptom)
+        ? current.symptoms.filter(
+            (item) => item !== symptom
+          )
+        : [...current.symptoms, symptom],
+    }));
+
+    setSaved(false);
+    setError("");
+  }
+
+  async function saveCheckIn() {
+    if (saving) return;
+
+    setSaving(true);
+    setSaved(false);
+    setError("");
+
     try {
-      localStorage.setItem(key, JSON.stringify(data));
+      const checkInRef = doc(
+        db,
+        "users",
+        uid,
+        "dailyCheckIns",
+        date
+      );
+
+      await setDoc(
+        checkInRef,
+        {
+          mood: data.mood,
+          symptoms: data.symptoms,
+          note: data.note,
+          date,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
       setSaved(true);
-    } catch {}
-  };
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Could not save your check-in. Please try again."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div
+        className="mx-5 mt-5 rounded-2xl p-5 text-center text-sm"
+        style={{
+          background: "#FFFFFF",
+          color: COLORS.plum,
+          border: `1px solid ${COLORS.mist}`,
+        }}
+      >
+        Loading your check-in...
+      </div>
+    );
+  }
 
   return (
-    <div
-      className="mx-5 mt-5 p-4 rounded-2xl"
-      style={{ background: "#fff", border: `1px solid ${COLORS.mist}` }}
+    <section
+      className="mx-5 mt-5 rounded-2xl p-4"
+      style={{
+        background: "#FFFFFF",
+        border: `1px solid ${COLORS.mist}`,
+      }}
     >
-      <p
-        className="text-sm font-semibold font-body mb-0.5"
+      <h2
+        className="mb-1 text-base font-semibold font-body"
         style={{ color: COLORS.plum }}
       >
         How are you feeling?
-      </p>
-      <p className="text-xs font-body mb-3" style={{ color: `${COLORS.plum}88` }}>
-        {date}
+      </h2>
+
+      <p
+        className="mb-4 text-xs font-body"
+        style={{ color: `${COLORS.plum}88` }}
+      >
+        Daily check-in · {date}
       </p>
 
-      {/* mood */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        {MOODS.map((m) => {
-          const active = data.mood === m.id;
+      {/* Mood selection */}
+      <p
+        className="mb-2 text-xs font-semibold font-body"
+        style={{ color: `${COLORS.plum}88` }}
+      >
+        Your mood
+      </p>
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        {MOODS.map((mood) => {
+          const active = data.mood === mood.id;
+
           return (
             <button
-              key={m.id}
-              onClick={() => {
-                setData({ ...data, mood: active ? null : m.id });
-                setSaved(false);
-              }}
-              className="px-3 py-2 rounded-xl text-xs font-semibold font-body flex items-center gap-1.5"
+              key={mood.id}
+              type="button"
+              aria-pressed={active}
+              onClick={() => toggleMood(mood.id)}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold font-body transition"
               style={{
-                background: active ? COLORS.rose : `${COLORS.plum}0A`,
-                color: active ? "#fff" : COLORS.plum,
+                background: active
+                  ? COLORS.rose
+                  : `${COLORS.plum}0A`,
+                color: active ? "#FFFFFF" : COLORS.plum,
+                border: `1px solid ${
+                  active ? COLORS.rose : COLORS.mist
+                }`,
               }}
             >
-              <span>{m.emoji}</span>
-              {m.label}
+              <span>{mood.emoji}</span>
+              {mood.label}
             </button>
           );
         })}
       </div>
 
-      {/* symptoms */}
-      <p className="text-xs font-semibold font-body mb-2" style={{ color: `${COLORS.plum}88` }}>
-        Symptoms
+      {/* Symptoms selection */}
+      <p
+        className="mb-2 text-xs font-semibold font-body"
+        style={{ color: `${COLORS.plum}88` }}
+      >
+        Symptoms (optional)
       </p>
-      <div className="flex gap-2 flex-wrap mb-4">
-        {SYMPTOMS.map((s) => {
-          const active = data.symptoms.includes(s);
+
+      <div className="mb-5 flex flex-wrap gap-2">
+        {SYMPTOMS.map((symptom) => {
+          const active = data.symptoms.includes(symptom);
+
           return (
             <button
-              key={s}
-              onClick={() => {
-                toggleSymptom(s);
-                setSaved(false);
-              }}
-              className="px-3 py-1.5 rounded-full text-xs font-body"
+              key={symptom}
+              type="button"
+              aria-pressed={active}
+              onClick={() => toggleSymptom(symptom)}
+              className="rounded-full px-3 py-1.5 text-xs font-body transition"
               style={{
-                background: active ? COLORS.plum : "transparent",
-                color: active ? "#fff" : COLORS.plum,
-                border: `1px solid ${active ? COLORS.plum : COLORS.mist}`,
+                background: active
+                  ? COLORS.plum
+                  : "#FFFFFF",
+                color: active ? "#FFFFFF" : COLORS.plum,
+                border: `1px solid ${
+                  active ? COLORS.plum : COLORS.mist
+                }`,
               }}
             >
-              {s}
+              {symptom}
             </button>
           );
         })}
       </div>
 
-      {/* note */}
+      {/* Private note */}
+      <label
+        htmlFor="daily-checkin-note"
+        className="mb-2 block text-xs font-semibold font-body"
+        style={{ color: `${COLORS.plum}88` }}
+      >
+        Personal note (optional)
+      </label>
+
       <textarea
+        id="daily-checkin-note"
         value={data.note}
-        onChange={(e) => {
-          setData({ ...data, note: e.target.value });
+        onChange={(event) => {
+          setData((current) => ({
+            ...current,
+            note: event.target.value,
+          }));
           setSaved(false);
+          setError("");
         }}
-        placeholder="A private note for yourself..."
+        placeholder="Write a note for yourself..."
         rows={3}
-        className="w-full px-3 py-2.5 rounded-xl border text-sm font-body mb-3"
-        style={{ borderColor: COLORS.mist, background: COLORS.cream, color: COLORS.plum }}
+        maxLength={2000}
+        className="mb-3 w-full rounded-xl border px-3 py-2.5 text-sm font-body"
+        style={{
+          borderColor: COLORS.mist,
+          background: COLORS.cream,
+          color: COLORS.plum,
+        }}
       />
 
+      {error && (
+        <p
+          role="alert"
+          className="mb-3 rounded-xl p-3 text-sm"
+          style={{
+            color: "#9F1239",
+            background: "#FFF1F2",
+          }}
+        >
+          {error}
+        </p>
+      )}
+
       <button
-        onClick={save}
-        className="w-full py-3 rounded-2xl font-semibold text-sm font-body"
-        style={{ background: COLORS.plum, color: "#fff" }}
+        type="button"
+        onClick={saveCheckIn}
+        disabled={saving}
+        className="w-full rounded-2xl py-3 font-semibold text-sm font-body transition"
+        style={{
+          background: COLORS.plum,
+          color: "#FFFFFF",
+          opacity: saving ? 0.7 : 1,
+        }}
       >
-        {saved ? "Saved ✓" : "Save check-in"}
+        {saving
+          ? "Saving..."
+          : saved
+            ? "Saved ✓"
+            : "Save check-in"}
       </button>
-    </div>
+
+      <p
+        className="mt-3 text-center text-xs leading-5 font-body"
+        style={{ color: `${COLORS.plum}77` }}
+      >
+        Your check-in is stored under your account and selected
+        date. Keep your account secure.
+      </p>
+    </section>
   );
 }

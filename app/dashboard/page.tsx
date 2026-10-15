@@ -895,7 +895,7 @@ export default function Dashboard() {
                           setChatOpen(true);
                         } else if (card.title === "My Health") {
                           setActiveTab("tracker");
-                          setHealthOpen(true);
+                          setHealthOpen(false);
                           setShowHome(false);
                         } else {
                           openTab(card.tab);

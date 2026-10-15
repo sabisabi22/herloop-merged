@@ -17,6 +17,7 @@ import {
 } from "@/lib/cycle";
 import MotivationCard from "./MotivationCard";
 import DailyCheckIn from "./Dailycheckin";
+import HealthRecords from "./HealthRecords";
 
 const WEEK_LABELS = ["S", "M", "T", "W", "T", "F", "S"];
 
@@ -183,7 +184,7 @@ export default function TrackerPanel({
 
   return (
     <div className="pb-4">
-      {/* Lifecycle-specific Learn content */}
+      {/* Lifecycle-specific content */}
       <MotivationCard tier={tier} />
 
       {/* Month navigation */}
@@ -456,8 +457,14 @@ export default function TrackerPanel({
         </button>
       </div>
 
-      {/* Daily check-in: mood, symptoms, note */}
-      <DailyCheckIn uid={uid} date={selected ?? todayStr} />
+      {/* Daily check-in */}
+      <DailyCheckIn
+        uid={uid}
+        date={selected ?? todayStr}
+      />
+
+      {/* Health records: period history, check-ins and medical notes */}
+      <HealthRecords uid={uid} />
 
       {/* Log period modal */}
       <AnimatePresence>
