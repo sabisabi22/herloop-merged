@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 
 
@@ -80,6 +80,7 @@ import SchemesPanel from "@/components/dashboard/SchemesPanel";
 
 import EducationHub from "@/components/dashboard/EducationHub";
 import LearnPanel from "@/components/dashboard/LearnPanel";
+import LearnAndGrowPanel from "@/components/dashboard/LearnAndGrowPanel";
 
 import ManagePanel from "@/components/dashboard/ManagePanel";
 
@@ -378,7 +379,7 @@ export default function Dashboard() {
 
           <p className="mt-1 text-sm opacity-70">
 
-            A little moment just for you 🌷
+            A little moment just for you ðŸŒ·
 
           </p>
 
@@ -632,7 +633,7 @@ export default function Dashboard() {
 
                   >
 
-                    Take a breath. This space is yours. 💗
+                    Take a breath. This space is yours. ðŸ’—
 
                   </p>
 
@@ -742,7 +743,7 @@ export default function Dashboard() {
 
                     <h2 className="mt-2 text-xl font-bold">
 
-                      Growing every day 🌷
+                      Growing every day ðŸŒ·
 
                     </h2>
 
@@ -848,7 +849,7 @@ export default function Dashboard() {
 
                   >
 
-                    MADE FOR YOU ✨
+                    MADE FOR YOU âœ¨
 
                   </p>
 
@@ -1256,7 +1257,7 @@ export default function Dashboard() {
 
               >
 
-                ← Back to home
+                â† Back to home
 
               </button>
 
@@ -1283,10 +1284,8 @@ export default function Dashboard() {
 
 
             {activeTab === "learn" && (
-
-              <EducationHub />
-
-            )}
+  <LearnAndGrowPanel uid={uid} tier={currentTier} />
+)}
 
 
 
@@ -1389,3 +1388,4 @@ export default function Dashboard() {
   );
 
 }
+

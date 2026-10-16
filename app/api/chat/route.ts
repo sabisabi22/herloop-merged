@@ -38,7 +38,7 @@ type ChatMessage = {
 
 export async function POST(request: Request) {
   try {
-    // 1. Check whether the API key is configured
+    // 1. Check the API key
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
@@ -50,10 +50,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Create the Gemini client only after checking the API key
+    // 2. Create the Gemini client
     const ai = new GoogleGenAI({ apiKey });
 
-    // 3. Read the incoming request
+    // 3. Read the request body
     let body: { messages?: unknown };
 
     try {
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
 
     const messages = body.messages;
 
-    // 4. Validate the messages array
+    // 4. Validate the messages
     if (
       !Array.isArray(messages) ||
       messages.length === 0 ||
@@ -102,21 +102,52 @@ export async function POST(request: Request) {
       );
     }
 
-    // 5. Send the conversation to Gemini
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash",
-      contents: validMessages.map((message) => ({
-        role: message.role,
-        parts: [{ text: message.text }],
-      })),
-      config: {
-        systemInstruction,
-        maxOutputTokens: 1600,
-        temperature: 0.6,
-      },
-    });
+    // 5. Prepare conversation content
+    const contents = validMessages.map((message) => ({
+      role: message.role,
+      parts: [{ text: message.text }],
+    }));
 
-    // 6. Check Gemini's response
+    // 6. Try the primary model, then a fallback for temporary errors
+    let response;
+
+    try {
+      response = await ai.models.generateContent({
+        model: "gemini-3.8-flash",
+        contents,
+        config: {
+          systemInstruction,
+          maxOutputTokens: 1600,
+          temperature: 0.6,
+        },
+      });
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      const isTemporary =
+        /UNAVAILABLE|503|high demand|overload/i.test(errorMessage);
+
+      if (!isTemporary) {
+        throw error;
+      }
+
+      console.warn(
+        "HerLoop chat: Primary model unavailable; trying fallback."
+      );
+
+      response = await ai.models.generateContent({
+        model: "gemini-3.6-flash",
+        contents,
+        config: {
+          systemInstruction,
+          maxOutputTokens: 1600,
+          temperature: 0.6,
+        },
+      });
+    }
+
+    // 7. Check the response
     const reply = response.text?.trim();
 
     if (!reply) {
@@ -128,12 +159,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // 7. Return the reply to the frontend
+    // 8. Return the reply
     return NextResponse.json({ reply });
   } catch (error: unknown) {
-    // Log useful error details in your local terminal
     if (error instanceof Error) {
-      console.error("HerLoop chat error:", error.name, error.message);
+      console.error(
+        "HerLoop chat error:",
+        error.name,
+        error.message
+      );
     } else {
       console.error("HerLoop chat error:", error);
     }

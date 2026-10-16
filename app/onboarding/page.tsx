@@ -80,7 +80,9 @@ export default function Onboarding() {
 
   async function saveField(field: string, value: unknown) {
     if (!uid) {
-      throw new Error("Your account is not ready yet. Please try again.");
+      throw new Error(
+        "Your account is not ready yet. Please try again."
+      );
     }
 
     await updateProfileField(uid, field as never, value as never);
@@ -100,7 +102,10 @@ export default function Onboarding() {
     const selectedDate = new Date(`${dateOfBirth}T00:00:00`);
     const today = new Date();
 
-    if (Number.isNaN(selectedDate.getTime()) || selectedDate > today) {
+    if (
+      Number.isNaN(selectedDate.getTime()) ||
+      selectedDate > today
+    ) {
       setError("Please enter a valid date of birth.");
       return;
     }
@@ -117,12 +122,14 @@ export default function Onboarding() {
     setAge(calculatedAge);
 
     try {
+      // Save the selected module to the user profile.
       await saveField("selectedModules", moduleChoice);
+
       await saveField("dateOfBirth", dateOfBirth);
       await saveField("age", calculatedAge);
 
       if (calculatedAge < 18) {
-        // Keep the existing guardian-approval requirement.
+        // Keep the existing guardian approval requirement.
         setStep("teenParent");
       } else {
         setStep("adultChoice");
@@ -163,7 +170,10 @@ export default function Onboarding() {
   }
 
   async function chooseMyself() {
-    if (!uid) return;
+    if (!uid) {
+      setError("Your account is not ready yet.");
+      return;
+    }
 
     setBusy(true);
     setError("");
@@ -181,7 +191,10 @@ export default function Onboarding() {
   }
 
   async function submitChildDetails() {
-    if (!uid) return;
+    if (!uid) {
+      setError("Your account is not ready yet.");
+      return;
+    }
 
     if (!childName.trim() || !childAge) {
       setError("Please enter your child's name and age.");
@@ -190,7 +203,11 @@ export default function Onboarding() {
 
     const parsedAge = Number(childAge);
 
-    if (!Number.isInteger(parsedAge) || parsedAge < 0 || parsedAge > 120) {
+    if (
+      !Number.isInteger(parsedAge) ||
+      parsedAge < 0 ||
+      parsedAge > 120
+    ) {
       setError("Please enter a valid age for your child.");
       return;
     }
@@ -216,33 +233,41 @@ export default function Onboarding() {
   }
 
   async function finishHealthSetup() {
-    if (!uid) return;
+    if (!uid) {
+      setError("Your account is not ready yet.");
+      return;
+    }
 
     setBusy(true);
     setError("");
 
     try {
-      await saveField("periodTrackingEnabled", periodTracking === "yes");
+      await saveField(
+        "periodTrackingEnabled",
+        periodTracking === "yes"
+      );
+
       await saveField(
         "pregnancySupportEnabled",
         pregnancySupport === "yes"
       );
-      await saveField(
-        "healthPreferencesCompleted",
-        true
-      );
+
+      await saveField("healthPreferencesCompleted", true);
 
       router.push("/dashboard");
     } catch (e: unknown) {
       setError(
-        e instanceof Error ? e.message : "Could not save your preferences."
+        e instanceof Error
+          ? e.message
+          : "Could not save your preferences."
       );
     } finally {
       setBusy(false);
     }
   }
 
-  const showPeriodQuestion = age !== null && age >= 10 && age <= 55;
+  const showPeriodQuestion =
+    age !== null && age >= 10 && age <= 55;
 
   return (
     <main
@@ -256,7 +281,7 @@ export default function Onboarding() {
         <p className="eyebrow mb-3">Welcome to HerLoop</p>
 
         <div className="mb-6 flex items-center gap-2">
-          {(["modules", "dob"] as Step[]).slice(0, 2).map((item, index) => (
+          {(["modules", "dob"] as Step[]).map((item, index) => (
             <div
               key={item}
               className="h-1.5 flex-1 rounded-full"
@@ -310,7 +335,9 @@ export default function Onboarding() {
                     icon="✦"
                     title="Health + Education"
                     description="Everything in Health, plus learning resources, scholarships, eligibility details and career opportunities."
-                    onClick={() => setModuleChoice("health_education")}
+                    onClick={() =>
+                      setModuleChoice("health_education")
+                    }
                   />
                 </div>
 
@@ -319,6 +346,23 @@ export default function Onboarding() {
                   busy={busy}
                   onClick={() => {
                     setError("");
+
+                    try {
+                      localStorage.setItem(
+                        "herloop_selected_module",
+                        moduleChoice
+                      );
+                    } catch (e) {
+                      console.error(
+                        "Unable to save selected module:",
+                        e
+                      );
+                      setError(
+                        "Could not save your module selection. Please check your browser settings and try again."
+                      );
+                      return;
+                    }
+
                     setStep("dob");
                   }}
                 />
@@ -450,6 +494,7 @@ export default function Onboarding() {
                     label="Myself"
                     onClick={chooseMyself}
                   />
+
                   <ChoiceButton
                     label="My child"
                     onClick={() => setStep("childDetails")}
@@ -541,11 +586,13 @@ export default function Onboarding() {
                         label="Yes, set up my period tracker"
                         onClick={() => setPeriodTracking("yes")}
                       />
+
                       <PreferenceButton
                         selected={periodTracking === "no"}
                         label="No, not right now"
                         onClick={() => setPeriodTracking("no")}
                       />
+
                       <PreferenceButton
                         selected={periodTracking === "later"}
                         label="Decide later"
@@ -580,11 +627,13 @@ export default function Onboarding() {
                         label="Yes, show me pregnancy support"
                         onClick={() => setPregnancySupport("yes")}
                       />
+
                       <PreferenceButton
                         selected={pregnancySupport === "no"}
                         label="No, continue with general health resources"
                         onClick={() => setPregnancySupport("no")}
                       />
+
                       <PreferenceButton
                         selected={pregnancySupport === "later"}
                         label="Prefer to decide later"
@@ -598,9 +647,9 @@ export default function Onboarding() {
                   className="mb-4 text-xs leading-5"
                   style={{ color: COLORS.plumSoft }}
                 >
-                  Your preferences are private to your account and
-                  should be changeable later. Health information is
-                  educational and does not replace professional care.
+                  Your preferences should be changeable later. Health
+                  information is educational and does not replace
+                  professional care.
                 </p>
 
                 <PrimaryButton
@@ -661,9 +710,12 @@ function ModuleCard({
         >
           {icon}
         </span>
+
         <span
           className="text-sm font-semibold"
-          style={{ color: selected ? COLORS.rose : COLORS.plumSoft }}
+          style={{
+            color: selected ? COLORS.rose : COLORS.plumSoft,
+          }}
         >
           {selected ? "Selected ✓" : "Select"}
         </span>

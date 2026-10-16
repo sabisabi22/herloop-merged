@@ -3,9 +3,12 @@
 
 import { useEffect, useState } from "react";
 import type { AccountTier } from "@/lib/auth";
+
 import LearnPanel from "@/components/dashboard/LearnPanel";
 import EducationHub from "@/components/dashboard/EducationHub";
 import LessonPlayer from "@/components/dashboard/LessonPlayer";
+
+type ModuleChoice = "health" | "health_education";
 
 type LearnAndGrowPanelProps = {
   uid: string;
@@ -16,7 +19,9 @@ export default function LearnAndGrowPanel({
   uid,
   tier,
 }: LearnAndGrowPanelProps) {
-  const [selectedModule, setSelectedModule] = useState("health");
+  const [selectedModule, setSelectedModule] =
+    useState<ModuleChoice>("health");
+
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -25,12 +30,19 @@ export default function LearnAndGrowPanel({
         "herloop_selected_module"
       );
 
-      setSelectedModule(savedModule || "health");
+      if (
+        savedModule === "health" ||
+        savedModule === "health_education"
+      ) {
+        setSelectedModule(savedModule);
+      } else {
+        setSelectedModule("health");
+      }
     } catch {
       setSelectedModule("health");
+    } finally {
+      setReady(true);
     }
-
-    setReady(true);
   }, []);
 
   if (!ready) {
@@ -43,14 +55,46 @@ export default function LearnAndGrowPanel({
     );
   }
 
+  // HEALTH + EDUCATION:
+  // Show all existing health learning content
+  // plus the complete education learning space.
   if (selectedModule === "health_education") {
     return (
       <div className="space-y-8">
-        <EducationHub />
-        <LessonPlayer />
+        <section>
+          <h2 className="mb-4 text-xl font-bold">
+            Health & Wellbeing
+          </h2>
+
+          <LearnPanel
+            uid={uid}
+            tier={tier}
+            mode="health"
+          />
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xl font-bold">
+            Education & Skills
+          </h2>
+
+          <EducationHub />
+
+          <div className="mt-6">
+            <LessonPlayer />
+          </div>
+        </section>
       </div>
     );
   }
 
-  return <LearnPanel uid={uid} tier={tier} />;
+  // HEALTH ONLY:
+  // Do not render EducationHub or LessonPlayer.
+  return (
+    <LearnPanel
+      uid={uid}
+      tier={tier}
+      mode="health"
+    />
+  );
 }
